@@ -7,7 +7,7 @@ import 'exchange_screen.dart';
 import 'review_screen.dart';
 import 'gather_screen.dart';
 import 'chat_list_screen.dart';
-import 'notification_screen.dart';
+import 'notification_screen.dart'; // ← 추가
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -108,10 +108,10 @@ class _HomeTab extends StatelessWidget {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Column(
+                    const Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
+                      children: [
                         Text(
                           '📍 안암동',
                           style: TextStyle(
@@ -135,10 +135,12 @@ class _HomeTab extends StatelessWidget {
                       children: [
                         IconButton(
                           icon: const Icon(Icons.notifications_outlined),
+                          // ✅ 알림 화면 연결
                           onPressed: () {
                             Navigator.of(context, rootNavigator: true).push(
                               MaterialPageRoute(
-                                  builder: (_) => const NotificationScreen()),
+                                builder: (_) => const NotificationScreen(),
+                              ),
                             );
                           },
                           color: AppColors.textPrimary,
@@ -166,7 +168,7 @@ class _HomeTab extends StatelessWidget {
           ),
 
           // ── 배너 ──
-          SliverToBoxAdapter(
+          const SliverToBoxAdapter(
             child: _HomeBanner(),
           ),
 
@@ -176,6 +178,7 @@ class _HomeTab extends StatelessWidget {
           ),
 
           // ── 최근 공동구매 ──
+          // ✅ 더보기 → 공동구매 화면 연결
           SliverToBoxAdapter(
             child: SectionHeader(
               title: '🛒 마감 임박 공동구매',
@@ -185,11 +188,12 @@ class _HomeTab extends StatelessWidget {
               ),
             ),
           ),
-          SliverToBoxAdapter(
+          const SliverToBoxAdapter(
             child: _RecentGroupBuy(),
           ),
 
           // ── 오늘의 모임 ──
+          // ✅ 더보기 → 모임 화면 연결
           SliverToBoxAdapter(
             child: SectionHeader(
               title: '🎯 오늘의 모임',
@@ -199,7 +203,7 @@ class _HomeTab extends StatelessWidget {
               ),
             ),
           ),
-          SliverToBoxAdapter(
+          const SliverToBoxAdapter(
             child: _TodayGather(),
           ),
 
@@ -210,7 +214,10 @@ class _HomeTab extends StatelessWidget {
   }
 }
 
+// ─── 홈 배너 ─────────────────────────────────────────────────────
 class _HomeBanner extends StatelessWidget {
+  const _HomeBanner();
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -270,9 +277,9 @@ class _PointBadge extends StatelessWidget {
         color: Colors.white.withOpacity(0.25),
         borderRadius: BorderRadius.circular(20),
       ),
-      child: Row(
+      child: const Row(
         mainAxisSize: MainAxisSize.min,
-        children: const [
+        children: [
           Icon(Icons.monetization_on, size: 14, color: Colors.white),
           SizedBox(width: 4),
           Text(
@@ -289,6 +296,7 @@ class _PointBadge extends StatelessWidget {
   }
 }
 
+// ─── 기능 바로가기 그리드 ─────────────────────────────────────────
 class _FeatureGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -350,7 +358,10 @@ class _Feature {
   _Feature(this.name, this.emoji, this.color, this.screen);
 }
 
+// ─── 마감 임박 공동구매 ───────────────────────────────────────────
 class _RecentGroupBuy extends StatelessWidget {
+  const _RecentGroupBuy();
+
   @override
   Widget build(BuildContext context) {
     final posts =
@@ -427,7 +438,10 @@ class _RecentGroupBuy extends StatelessWidget {
       .replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+$)'), (m) => '${m[1]},');
 }
 
+// ─── 오늘의 모임 ──────────────────────────────────────────────────
 class _TodayGather extends StatelessWidget {
+  const _TodayGather();
+
   @override
   Widget build(BuildContext context) {
     final posts = MockData.gatherPosts.where((p) => !p.isFull).take(2).toList();
@@ -445,21 +459,11 @@ class _TodayGather extends StatelessWidget {
             decoration: BoxDecoration(
               color: AppColors.surface,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.divider),
+              border: Border.all(color: AppColors.gatherColor.withOpacity(0.3)),
             ),
             child: Row(
               children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: AppColors.gatherColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Center(
-                    child: Text(p.emoji, style: const TextStyle(fontSize: 22)),
-                  ),
-                ),
+                Text(p.emoji, style: const TextStyle(fontSize: 28)),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -472,7 +476,7 @@ class _TodayGather extends StatelessWidget {
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 2),
                       Text(
                         '📍 ${p.place}',
                         style: const TextStyle(
@@ -486,7 +490,22 @@ class _TodayGather extends StatelessWidget {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    TagBadge(label: label, color: AppColors.gatherColor),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppColors.gatherColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        label,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.gatherColor,
+                        ),
+                      ),
+                    ),
                     const SizedBox(height: 4),
                     Text(
                       '${p.currentMembers}/${p.maxMembers}명',
