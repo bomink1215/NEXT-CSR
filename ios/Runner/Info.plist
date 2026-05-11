@@ -26,6 +26,13 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+
+	<!-- 위치 권한 설명 (필수) -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>동네 이웃과 매칭하기 위해 현재 위치를 사용합니다.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>동네 이웃과 매칭하기 위해 현재 위치를 사용합니다.</string>
+
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

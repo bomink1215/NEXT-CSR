@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'theme/app_theme.dart';
-import 'screens/home_screen.dart';
+import 'models/user_store.dart';
+import 'screens/signup_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,11 +20,14 @@ class GatchiSapsidaApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: '같이삽시다',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.theme,
-      home: const HomeScreen(),
+    return UserStoreProvider(
+      store: UserStore(),
+      child: MaterialApp(
+        title: '같이삽시다',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.theme,
+        home: const SignupScreen(),
+      ),
     );
   }
 }
