@@ -2,13 +2,13 @@
 class GroupBuyPost {
   final String id;
   final String title;
-  final String category;      // 식료품 / 생활용품 / 배달음식
+  final String category; // 식료품 / 생활용품 / 배달음식
   final String imageUrl;
   final int totalPrice;
-  final int unitPrice;        // 1인 부담금
+  final int unitPrice; // 1인 부담금
   final int maxParticipants;
   final int currentParticipants;
-  final int walkMinutes;      // 도보 거리(분)
+  final int walkMinutes; // 도보 거리(분)
   final String location;
   final String authorName;
   final DateTime createdAt;
@@ -135,6 +135,7 @@ class GatherPost {
 }
 
 enum GenderFilter { any, maleOnly, femaleOnly }
+
 enum AgeFilter { any, twenties, thirties, mixed }
 
 // ─── 채팅 모델 ───────────────────────────────────────────────────
@@ -159,3 +160,35 @@ class ChatRoom {
 }
 
 enum ChatRoomType { groupBuy, exchange, gather }
+
+// ─── 알림 모델 ───────────────────────────────────────────────────
+enum NotificationType { groupBuy, exchange, gather, review, system }
+
+class AppNotification {
+  final String id;
+  final NotificationType type;
+  final String title;
+  final String body;
+  final DateTime createdAt;
+  final bool isRead;
+
+  AppNotification({
+    required this.id,
+    required this.type,
+    required this.title,
+    required this.body,
+    required this.createdAt,
+    this.isRead = false,
+  });
+
+  AppNotification copyWith({bool? isRead}) {
+    return AppNotification(
+      id: id,
+      type: type,
+      title: title,
+      body: body,
+      createdAt: createdAt,
+      isRead: isRead ?? this.isRead,
+    );
+  }
+}

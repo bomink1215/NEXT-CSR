@@ -236,4 +236,45 @@ class MockData {
       type: ChatRoomType.gather,
     ),
   ];
+
+  static List<AppNotification> notifications = [
+    AppNotification(
+      id: '1',
+      type: NotificationType.groupBuy,
+      title: '🛒 공동구매 마감 임박!',
+      body: '코스트코 두루마리 화장지 — 1자리 남았어요. 지금 참여하세요!',
+      createdAt: DateTime.now().subtract(const Duration(minutes: 10)),
+    ),
+    AppNotification(
+      id: '2',
+      type: NotificationType.exchange,
+      title: '🔄 교환 요청이 왔어요',
+      body: '김보민님이 "라면 5봉지 ↔ 즉석밥" 교환을 제안했어요.',
+      createdAt: DateTime.now().subtract(const Duration(minutes: 35)),
+      isRead: true,
+    ),
+    AppNotification(
+      id: '3',
+      type: NotificationType.gather,
+      title: '👥 모임 정원이 찼어요',
+      body: '"오늘 저녁 혼밥 메이트" 모임이 마감됐어요.',
+      createdAt: DateTime.now().subtract(const Duration(hours: 1)),
+    ),
+    AppNotification(
+      id: '4',
+      type: NotificationType.review,
+      title: '⭐ 리뷰 작성 포인트 지급',
+      body: '안암동 원룸 A동 리뷰 작성 완료! +30P가 적립됐어요.',
+      createdAt: DateTime.now().subtract(const Duration(hours: 3)),
+      isRead: true,
+    ),
+    AppNotification(
+      id: '5',
+      type: NotificationType.system,
+      title: '🏠 같이삽시다 업데이트',
+      body: '새로운 기능이 추가됐어요. 원룸 리뷰에서 포인트를 더 쉽게 모을 수 있어요!',
+      createdAt: DateTime.now().subtract(const Duration(days: 1)),
+      isRead: true,
+    ),
+  ];
 }

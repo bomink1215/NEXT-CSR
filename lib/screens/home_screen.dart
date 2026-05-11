@@ -7,6 +7,7 @@ import 'exchange_screen.dart';
 import 'review_screen.dart';
 import 'gather_screen.dart';
 import 'chat_list_screen.dart';
+import 'notification_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -134,7 +135,12 @@ class _HomeTab extends StatelessWidget {
                       children: [
                         IconButton(
                           icon: const Icon(Icons.notifications_outlined),
-                          onPressed: () {},
+                          onPressed: () {
+                            Navigator.of(context, rootNavigator: true).push(
+                              MaterialPageRoute(
+                                  builder: (_) => const NotificationScreen()),
+                            );
+                          },
                           color: AppColors.textPrimary,
                         ),
                         Positioned(
@@ -170,16 +176,28 @@ class _HomeTab extends StatelessWidget {
           ),
 
           // ── 최근 공동구매 ──
-          const SliverToBoxAdapter(
-            child: SectionHeader(title: '🛒 마감 임박 공동구매', actionLabel: '더보기'),
+          SliverToBoxAdapter(
+            child: SectionHeader(
+              title: '🛒 마감 임박 공동구매',
+              actionLabel: '더보기',
+              onAction: () => Navigator.of(context, rootNavigator: true).push(
+                MaterialPageRoute(builder: (_) => const GroupBuyScreen()),
+              ),
+            ),
           ),
           SliverToBoxAdapter(
             child: _RecentGroupBuy(),
           ),
 
           // ── 오늘의 모임 ──
-          const SliverToBoxAdapter(
-            child: SectionHeader(title: '🎯 오늘의 모임', actionLabel: '더보기'),
+          SliverToBoxAdapter(
+            child: SectionHeader(
+              title: '🎯 오늘의 모임',
+              actionLabel: '더보기',
+              onAction: () => Navigator.of(context, rootNavigator: true).push(
+                MaterialPageRoute(builder: (_) => const GatherScreen()),
+              ),
+            ),
           ),
           SliverToBoxAdapter(
             child: _TodayGather(),
@@ -335,7 +353,8 @@ class _Feature {
 class _RecentGroupBuy extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    final posts = MockData.groupBuyPosts.where((p) => !p.isFull).take(3).toList();
+    final posts =
+        MockData.groupBuyPosts.where((p) => !p.isFull).take(3).toList();
     return SizedBox(
       height: 160,
       child: ListView.builder(
@@ -403,8 +422,9 @@ class _RecentGroupBuy extends StatelessWidget {
     );
   }
 
-  String _formatPrice(int price) =>
-      price.toString().replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+$)'), (m) => '${m[1]},');
+  String _formatPrice(int price) => price
+      .toString()
+      .replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+$)'), (m) => '${m[1]},');
 }
 
 class _TodayGather extends StatelessWidget {
