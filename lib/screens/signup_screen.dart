@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../models/user_store.dart';
 import 'home_screen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -16,8 +18,16 @@ class _SignupScreenState extends State<SignupScreen> {
   final _formKey = GlobalKey<FormState>();
 
   final List<String> _suggestions = [
-    '안암동', '종암동', '정릉동', '길음동', '미아동',
-    '성북동', '돈암동', '석관동', '장위동', '월곡동',
+    '안암동',
+    '종암동',
+    '정릉동',
+    '길음동',
+    '미아동',
+    '성북동',
+    '돈암동',
+    '석관동',
+    '장위동',
+    '월곡동',
   ];
 
   @override
@@ -27,15 +37,34 @@ class _SignupScreenState extends State<SignupScreen> {
     super.dispose();
   }
 
-  void _submit() {
+  void _submit() async {
     if (_formKey.currentState!.validate()) {
-      UserStoreProvider.of(context).signUp(
-        name: _nameController.text.trim(),
-        location: _locationController.text.trim(),
-      );
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-      );
+      try {
+        UserCredential userCredential =
+            await FirebaseAuth.instance.signInAnonymously();
+        String uid = userCredential.user!.uid;
+
+        await FirebaseFirestore.instance.collection('users').doc(uid).set({
+          'name': _nameController.text.trim(),
+          'location': _locationController.text.trim(),
+          'createdAt': FieldValue.serverTimestamp(),
+          'points': 0, // 초기 포인트 설정
+        });
+
+        if (!mounted) return;
+        UserStoreProvider.of(context).signUp(
+          name: _nameController.text.trim(),
+          location: _locationController.text.trim(),
+        );
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('가입 중 오류가 발생했습니다: $e')),
+        );
+      }
     }
   }
 
@@ -107,7 +136,8 @@ class _SignupScreenState extends State<SignupScreen> {
                 const SizedBox(height: 4),
                 const Text(
                   '공동구매·모임 등 근처 이웃과 매칭할 때 사용돼요',
-                  style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                  style:
+                      TextStyle(fontSize: 12, color: AppColors.textSecondary),
                 ),
                 const SizedBox(height: 8),
                 TextFormField(

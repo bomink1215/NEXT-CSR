@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "787164281308",
+    "project_id": "gatchi-sapsida",
+    "storage_bucket": "gatchi-sapsida.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:787164281308:android:9245e7b43bbfa344ec7719",
+        "android_client_info": {
+          "package_name": "com.example.live"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC74_6jO6Pjzrnb5NEsco1Zfwg7FHk8n14"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

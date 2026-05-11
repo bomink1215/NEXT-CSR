@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 // ─── 공동구매 모델 ───────────────────────────────────────────────
 class GroupBuyPost {
   final String id;
@@ -147,6 +149,7 @@ class ChatRoom {
   final int unreadCount;
   final String avatarEmoji;
   final ChatRoomType type;
+  final List<String> members;
 
   ChatRoom({
     required this.id,
@@ -156,7 +159,25 @@ class ChatRoom {
     required this.unreadCount,
     required this.avatarEmoji,
     required this.type,
+    required this.members,
   });
+
+  factory ChatRoom.fromMap(Map<String, dynamic> data, String documentId) {
+    return ChatRoom(
+      id: documentId,
+      title: data['title'] ?? '이름 없는 채팅방',
+      lastMessage: data['lastMessage'] ?? '',
+      lastMessageTime:
+          (data['lastMessageTime'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      unreadCount: data['unreadCount'] ?? 0,
+      avatarEmoji: data['avatarEmoji'] ?? '💬',
+      type: ChatRoomType.values.firstWhere(
+        (e) => e.name == data['type'],
+        orElse: () => ChatRoomType.gather,
+      ),
+      members: List<String>.from(data['members'] ?? []),
+    );
+  }
 }
 
 enum ChatRoomType { groupBuy, exchange, gather }

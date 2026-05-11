@@ -216,6 +216,7 @@ class MockData {
       unreadCount: 2,
       avatarEmoji: '🧻',
       type: ChatRoomType.groupBuy,
+      members: [],
     ),
     ChatRoom(
       id: '2',
@@ -225,6 +226,7 @@ class MockData {
       unreadCount: 0,
       avatarEmoji: '🍜',
       type: ChatRoomType.exchange,
+      members: [],
     ),
     ChatRoom(
       id: '3',
@@ -234,6 +236,7 @@ class MockData {
       unreadCount: 1,
       avatarEmoji: '🍽️',
       type: ChatRoomType.gather,
+      members: [],
     ),
   ];
 
