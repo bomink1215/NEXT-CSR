@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../models/user_store.dart';
-import '../services/location_service.dart';
 import 'home_screen.dart';
 
 class SignupScreen extends StatefulWidget {
@@ -15,33 +14,17 @@ class _SignupScreenState extends State<SignupScreen> {
   final _nameController = TextEditingController();
   final _locationController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
-  bool _isLocating = false; // GPS 로딩 상태
+
+  final List<String> _suggestions = [
+    '안암동', '종암동', '정릉동', '길음동', '미아동',
+    '성북동', '돈암동', '석관동', '장위동', '월곡동',
+  ];
 
   @override
   void dispose() {
     _nameController.dispose();
     _locationController.dispose();
     super.dispose();
-  }
-
-  // GPS로 현재 위치 가져오기
-  Future<void> _detectLocation() async {
-    setState(() => _isLocating = true);
-    try {
-      final district = await LocationService.getCurrentDistrict();
-      setState(() => _locationController.text = district);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString().replaceFirst('Exception: ', '')),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isLocating = false);
-    }
   }
 
   void _submit() {
@@ -127,79 +110,54 @@ class _SignupScreenState extends State<SignupScreen> {
                   style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
                 ),
                 const SizedBox(height: 8),
+                TextFormField(
+                  controller: _locationController,
+                  decoration: _inputDecoration(
+                    hint: '예) 안암동',
+                    icon: Icons.location_on_outlined,
+                  ),
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) return '동네를 입력해주세요';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 12),
 
-                // 동네 입력 + GPS 버튼 한 줄
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: TextFormField(
-                        controller: _locationController,
-                        decoration: _inputDecoration(
-                          hint: '예) 안암동',
-                          icon: Icons.location_on_outlined,
-                        ),
-                        validator: (v) {
-                          if (v == null || v.trim().isEmpty) {
-                            return '동네를 입력하거나 GPS로 찾아주세요';
-                          }
-                          return null;
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    // GPS 버튼
-                    SizedBox(
-                      height: 56,
-                      child: ElevatedButton(
-                        onPressed: _isLocating ? null : _detectLocation,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.secondary,
-                          padding: const EdgeInsets.symmetric(horizontal: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                // 동네 빠른 선택 칩
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _suggestions.map((s) {
+                    final isSelected = _locationController.text == s;
+                    return GestureDetector(
+                      onTap: () => setState(() => _locationController.text = s),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? AppColors.primaryLight
+                              : AppColors.surface,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: isSelected
+                                ? AppColors.primary
+                                : AppColors.divider,
                           ),
                         ),
-                        child: _isLocating
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.my_location,
-                                      color: Colors.white, size: 20),
-                                  SizedBox(height: 2),
-                                  Text(
-                                    'GPS',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                ],
-                              ),
+                        child: Text(
+                          s,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: isSelected
+                                ? AppColors.primary
+                                : AppColors.textSecondary,
+                          ),
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                // GPS 안내 텍스트
-                Row(
-                  children: const [
-                    Icon(Icons.info_outline, size: 13, color: AppColors.textHint),
-                    SizedBox(width: 4),
-                    Text(
-                      'GPS 버튼을 누르면 현재 위치를 자동으로 찾아요',
-                      style: TextStyle(fontSize: 12, color: AppColors.textHint),
-                    ),
-                  ],
+                    );
+                  }).toList(),
                 ),
                 const SizedBox(height: 48),
 

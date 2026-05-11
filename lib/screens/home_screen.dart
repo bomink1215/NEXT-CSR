@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../models/mock_data.dart';
 import '../models/user_store.dart';
-import '../services/location_service.dart';
 import '../widgets/common_widgets.dart';
 import 'group_buy_screen.dart';
 import 'exchange_screen.dart';
@@ -90,16 +89,143 @@ class _HomeTab extends StatelessWidget {
   void _showLocationSheet(BuildContext context) {
     final store = UserStoreProvider.of(context);
     final controller = TextEditingController(text: store.location);
+    final suggestions = [
+      '안암동', '종암동', '정릉동', '길음동', '미아동',
+      '성북동', '돈암동', '석관동', '장위동', '월곡동',
+    ];
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _LocationSheet(
-        controller: controller,
-        onConfirm: (newLocation) {
-          store.updateLocation(newLocation);
-        },
+      builder: (_) => StatefulBuilder(
+        builder: (context, setModalState) => Container(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+            top: 20,
+            left: 20,
+            right: 20,
+          ),
+          decoration: const BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.divider,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                '내 동네 변경',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                '변경하면 근처 이웃 매칭 기준이 바뀌어요',
+                style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: controller,
+                autofocus: true,
+                onChanged: (_) => setModalState(() {}),
+                decoration: InputDecoration(
+                  hintText: '동네 이름 입력',
+                  prefixIcon: const Icon(Icons.location_on_outlined,
+                      color: AppColors.textHint),
+                  filled: true,
+                  fillColor: AppColors.background,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: AppColors.divider),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: AppColors.divider),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide:
+                        const BorderSide(color: AppColors.primary, width: 1.5),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: suggestions.map((s) {
+                  final isSelected = controller.text == s;
+                  return GestureDetector(
+                    onTap: () => setModalState(() => controller.text = s),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? AppColors.primaryLight
+                            : AppColors.background,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: isSelected
+                              ? AppColors.primary
+                              : AppColors.divider,
+                        ),
+                      ),
+                      child: Text(
+                        s,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: isSelected
+                              ? AppColors.primary
+                              : AppColors.textSecondary,
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    final newLocation = controller.text.trim();
+                    if (newLocation.isNotEmpty) {
+                      store.updateLocation(newLocation);
+                      Navigator.pop(context);
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text(
+                    '변경하기',
+                    style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -129,7 +255,6 @@ class _HomeTab extends StatelessWidget {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    // ✅ 동네 탭 → 수정 바텀시트
                     GestureDetector(
                       onTap: () => _showLocationSheet(context),
                       child: Column(
@@ -230,189 +355,6 @@ class _HomeTab extends StatelessWidget {
 
           const SliverToBoxAdapter(child: SizedBox(height: 24)),
         ],
-      ),
-    );
-  }
-}
-
-// ─── 동네 수정 바텀시트 (GPS 포함) ───────────────────────────────
-class _LocationSheet extends StatefulWidget {
-  final TextEditingController controller;
-  final void Function(String) onConfirm;
-
-  const _LocationSheet({required this.controller, required this.onConfirm});
-
-  @override
-  State<_LocationSheet> createState() => _LocationSheetState();
-}
-
-class _LocationSheetState extends State<_LocationSheet> {
-  bool _isLocating = false;
-
-  Future<void> _detectLocation() async {
-    setState(() => _isLocating = true);
-    try {
-      final district = await LocationService.getCurrentDistrict();
-      setState(() => widget.controller.text = district);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString().replaceFirst('Exception: ', '')),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isLocating = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return StatefulBuilder(
-      builder: (context, setModalState) => Container(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-          top: 20,
-          left: 20,
-          right: 20,
-        ),
-        decoration: const BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // 핸들
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.divider,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              '내 동네 변경',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 4),
-            const Text(
-              '변경하면 근처 이웃 매칭 기준이 바뀌어요',
-              style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
-            ),
-            const SizedBox(height: 16),
-
-            // 입력 + GPS 버튼
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: widget.controller,
-                    onChanged: (_) => setModalState(() {}),
-                    decoration: InputDecoration(
-                      hintText: '동네 이름 입력',
-                      prefixIcon: const Icon(Icons.location_on_outlined,
-                          color: AppColors.textHint),
-                      filled: true,
-                      fillColor: AppColors.background,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: AppColors.divider),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: AppColors.divider),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(
-                            color: AppColors.primary, width: 1.5),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                // ✅ GPS 버튼
-                SizedBox(
-                  height: 52,
-                  child: ElevatedButton(
-                    onPressed: _isLocating ? null : _detectLocation,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.secondary,
-                      padding: const EdgeInsets.symmetric(horizontal: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: _isLocating
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              color: Colors.white,
-                              strokeWidth: 2,
-                            ),
-                          )
-                        : const Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.my_location,
-                                  color: Colors.white, size: 20),
-                              SizedBox(height: 2),
-                              Text(
-                                'GPS',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
-                          ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-
-            // 확인 버튼
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () {
-                  final newLocation = widget.controller.text.trim();
-                  if (newLocation.isNotEmpty) {
-                    widget.onConfirm(newLocation);
-                    Navigator.pop(context);
-                  }
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: const Text(
-                  '변경하기',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -669,8 +611,8 @@ class _TodayGather extends StatelessWidget {
               decoration: BoxDecoration(
                 color: AppColors.surface,
                 borderRadius: BorderRadius.circular(14),
-                border:
-                    Border.all(color: AppColors.gatherColor.withOpacity(0.3)),
+                border: Border.all(
+                    color: AppColors.gatherColor.withOpacity(0.3)),
               ),
               child: Row(
                 children: [
