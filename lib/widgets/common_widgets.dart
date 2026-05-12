@@ -1,5 +1,76 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../theme/app_theme.dart';
+
+// ─── 이미지 피커 위젯 ────────────────────────────────────────────────────
+class ImagePickerModule extends StatefulWidget {
+  final Function(File?) onImageSelected;
+  final String label;
+
+  const ImagePickerModule(
+      {super.key, required this.onImageSelected, this.label = '사진 추가 (선택)'});
+
+  @override
+  State<ImagePickerModule> createState() => _ImagePickerModuleState();
+}
+
+class _ImagePickerModuleState extends State<ImagePickerModule> {
+  File? _image;
+  String? _webImagePath; // 웹용 경로 저장 변수
+  final ImagePicker _picker = ImagePicker();
+
+  Future<void> _pickImage() async {
+    final XFile? pickedFile = await _picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 70,
+    );
+
+    if (pickedFile != null) {
+      setState(() {
+        _image = File(pickedFile.path);
+        _webImagePath = pickedFile.path; // 웹에서도 경로를 인식할 수 있도록 저장
+      });
+      widget.onImageSelected(_image);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.center,
+      child: GestureDetector(
+        onTap: _pickImage,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          width: double.infinity,
+          height: 180,
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: AppColors.background,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.divider),
+          ),
+          child: _webImagePath != null
+              ? (kIsWeb
+                  ? Image.network(_webImagePath!, fit: BoxFit.cover)
+                  : Image.file(_image!, fit: BoxFit.cover))
+              : Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.camera_alt_outlined,
+                        color: AppColors.textHint, size: 32),
+                    const SizedBox(height: 8),
+                    Text(widget.label,
+                        style: const TextStyle(color: AppColors.textHint)),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+}
 
 // ─── 태그 뱃지 ────────────────────────────────────────────────────
 class TagBadge extends StatelessWidget {
@@ -221,7 +292,8 @@ class EmptyState extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             subtitle,
-            style: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
+            style:
+                const TextStyle(fontSize: 14, color: AppColors.textSecondary),
             textAlign: TextAlign.center,
           ),
         ],

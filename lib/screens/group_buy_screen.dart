@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:gatchi_sapsida/utils/storage_service.dart';
 import '../theme/app_theme.dart';
 import '../models/models.dart';
 import '../models/mock_data.dart';
@@ -363,8 +366,6 @@ class _GroupBuyDetail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final userStore = UserStoreProvider.of(context);
-
     return Container(
       height: MediaQuery.of(context).size.height * 0.7,
       decoration: const BoxDecoration(
@@ -505,7 +506,7 @@ class _GroupBuyDetail extends StatelessWidget {
             chatRef,
             {
               'postId': post.id,
-              'postTitle': post.title,
+              'title': post.title,
               'members': updatedMembers,
               'lastMessage': "${userStore.name}님이 참여하셨습니다.",
               'lastMessageTime': FieldValue.serverTimestamp(),
@@ -583,8 +584,10 @@ class _CreateGroupBuySheet extends StatefulWidget {
 class _CreateGroupBuySheetState extends State<_CreateGroupBuySheet> {
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _totalPriceController = TextEditingController();
+  File? _selectedFile;
   String _type = '생활용품';
   int _members = 2;
+  bool _isUploading = false;
 
   @override
   void dispose() {
@@ -593,8 +596,16 @@ class _CreateGroupBuySheetState extends State<_CreateGroupBuySheet> {
     super.dispose();
   }
 
+  int get _unitPrice {
+    final total =
+        int.tryParse(_totalPriceController.text.replaceAll(',', '')) ?? 0;
+    return (total / _members).ceil(); // 올림 처리
+  }
+
   @override
   Widget build(BuildContext context) {
+    final userStore = UserStoreProvider.of(context);
+
     return Container(
       height: MediaQuery.of(context).size.height * 0.85,
       padding:
@@ -603,199 +614,236 @@ class _CreateGroupBuySheetState extends State<_CreateGroupBuySheet> {
         color: AppColors.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      child: Column(
-        children: [
-          Container(
-            margin: const EdgeInsets.only(top: 12),
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: AppColors.divider,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Row(
-              children: const [
-                Text('공동구매 글쓰기',
-                    style:
-                        TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-              ],
-            ),
-          ),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('카테고리',
-                      style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textSecondary)),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: ['식료품', '생활용품', '배달음식'].map((t) {
-                      return GestureDetector(
-                        onTap: () => setState(() => _type = t),
-                        child: Container(
-                          margin: const EdgeInsets.only(right: 8),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: _type == t
-                                ? AppColors.buyColor
-                                : AppColors.surface,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                                color: _type == t
-                                    ? AppColors.buyColor
-                                    : AppColors.divider),
-                          ),
-                          child: Text(t,
-                              style: TextStyle(
-                                color: _type == t
-                                    ? Colors.white
-                                    : AppColors.textSecondary,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 13,
-                              )),
-                        ),
-                      );
-                    }).toList(),
+      child: _isUploading
+          ? const Center(child: CircularProgressIndicator())
+          : Column(
+              children: [
+                Container(
+                  margin: const EdgeInsets.only(top: 12),
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.divider,
+                    borderRadius: BorderRadius.circular(2),
                   ),
-                  const SizedBox(height: 16),
-                  const Text('상품명',
-                      style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textSecondary)),
-                  const SizedBox(height: 8),
-                  TextField(
-                      controller: _titleController,
-                      decoration:
-                          InputDecoration(hintText: '예) 코스트코 두루마리 화장지 30롤')),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('총 금액',
-                                style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: AppColors.textSecondary)),
-                            const SizedBox(height: 8),
-                            TextField(
-                              controller: _totalPriceController,
-                              keyboardType: TextInputType.number,
-                              decoration: InputDecoration(
-                                  hintText: '0', suffixText: '원'),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('모집 인원',
-                                style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: AppColors.textSecondary)),
-                            const SizedBox(height: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: AppColors.cardBg,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: AppColors.divider),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Row(
+                    children: const [
+                      Text('공동구매 글쓰기',
+                          style: TextStyle(
+                              fontSize: 18, fontWeight: FontWeight.w700)),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('카테고리',
+                            style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textSecondary)),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: ['식료품', '생활용품', '배달음식'].map((t) {
+                            return GestureDetector(
+                              onTap: () => setState(() => _type = t),
+                              child: Container(
+                                margin: const EdgeInsets.only(right: 8),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: _type == t
+                                      ? AppColors.buyColor
+                                      : AppColors.surface,
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                      color: _type == t
+                                          ? AppColors.buyColor
+                                          : AppColors.divider),
+                                ),
+                                child: Text(t,
+                                    style: TextStyle(
+                                      color: _type == t
+                                          ? Colors.white
+                                          : AppColors.textSecondary,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13,
+                                    )),
                               ),
-                              child: Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
+                            );
+                          }).toList(),
+                        ),
+                        const SizedBox(height: 16),
+                        ImagePickerModule(
+                          label: '공동구매 물품 사진을 올려주세요!',
+                          onImageSelected: (file) =>
+                              setState(() => _selectedFile = file),
+                        ),
+                        const SizedBox(height: 12),
+                        const Text('상품명',
+                            style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textSecondary)),
+                        const SizedBox(height: 8),
+                        TextField(
+                            controller: _titleController,
+                            decoration: InputDecoration(
+                                hintText: '예) 코스트코 두루마리 화장지 30롤')),
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.remove, size: 18),
-                                    onPressed: () => setState(() {
-                                      if (_members > 2) _members--;
-                                    }),
-                                    padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(),
+                                  const Text('총 금액',
+                                      style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppColors.textSecondary)),
+                                  const SizedBox(height: 8),
+                                  TextField(
+                                    controller: _totalPriceController,
+                                    keyboardType: TextInputType.number,
+                                    onChanged: (_) => setState(() {}),
+                                    decoration: InputDecoration(
+                                        hintText: '0', suffixText: '원'),
                                   ),
-                                  Text('$_members명',
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.w700)),
-                                  IconButton(
-                                    icon: const Icon(Icons.add, size: 18),
-                                    onPressed: () => setState(() {
-                                      if (_members < 6) _members++;
-                                    }),
-                                    padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text('모집 인원',
+                                      style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppColors.textSecondary)),
+                                  const SizedBox(height: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.cardBg,
+                                      borderRadius: BorderRadius.circular(12),
+                                      border:
+                                          Border.all(color: AppColors.divider),
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        IconButton(
+                                          icon: const Icon(Icons.remove,
+                                              size: 18),
+                                          onPressed: () => setState(() {
+                                            if (_members > 2) _members--;
+                                          }),
+                                          padding: EdgeInsets.zero,
+                                          constraints: const BoxConstraints(),
+                                        ),
+                                        Text('$_members명',
+                                            style: const TextStyle(
+                                                fontWeight: FontWeight.w700)),
+                                        IconButton(
+                                          icon: const Icon(Icons.add, size: 18),
+                                          onPressed: () => setState(() {
+                                            if (_members < 6) _members++;
+                                          }),
+                                          padding: EdgeInsets.zero,
+                                          constraints: const BoxConstraints(),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ],
                               ),
                             ),
                           ],
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () async {
-                        final user = FirebaseAuth.instance.currentUser;
-                        if (user == null) return;
-
-                        await FirebaseFirestore.instance
-                            .collection('posts')
-                            .add({
-                          'type': 'groupBuy',
-                          'title': _titleController.text.trim(),
-                          'category': _type,
-                          'totalPrice': int.parse(_totalPriceController.text),
-                          'unitPrice':
-                              int.parse(_totalPriceController.text) ~/ _members,
-                          'maxParticipants': _members,
-                          'currentParticipants': 1, // 총대 포함
-                          'authorId': user.uid,
-                          'authorName': UserStoreProvider.of(context).name,
-                          'location': UserStoreProvider.of(context).location,
-                          'createdAt': FieldValue.serverTimestamp(),
-                          'isFull': false,
-                        });
-
-                        if (!mounted) return;
-
-                        Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('✅ 공동구매 게시글이 등록되었습니다!')),
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.buyColor,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                      ),
-                      child: const Text('등록하기', style: TextStyle(fontSize: 16)),
+                        const SizedBox(height: 24),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: _isUploading
+                                ? null
+                                : () => _submitPost(userStore),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.buyColor,
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                            ),
+                            child: const Text('등록하기',
+                                style: TextStyle(fontSize: 16)),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 20),
-                ],
-              ),
+                ),
+              ],
             ),
-          ),
-        ],
-      ),
     );
   }
+
+  Future<void> _submitPost(UserStore userStore) async {
+    if (_titleController.text.isEmpty || _totalPriceController.text.isEmpty) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('정보를 모두 입력해주세요.')));
+      return;
+    }
+
+    setState(() => _isUploading = true);
+
+    try {
+      String imageUrl = '';
+      if (_selectedFile != null) {
+        imageUrl =
+            await StorageService.uploadPostImage('groupBuy', _selectedFile!);
+      }
+
+      final totalPrice =
+          int.parse(_totalPriceController.text.replaceAll(',', ''));
+
+      await FirebaseFirestore.instance.collection('posts').add({
+        'type': 'groupBuy',
+        'title': _titleController.text.trim(),
+        'category': _type,
+        'imageUrl': imageUrl,
+        'totalPrice': totalPrice,
+        'unitPrice': _unitPrice,
+        'maxParticipants': _members,
+        'currentParticipants': 1,
+        'location': userStore.location,
+        'authorName': userStore.name,
+        'createdAt': FieldValue.serverTimestamp(),
+        'isFull': false,
+        'members': [userStore.name],
+      });
+
+      if (!mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('✅ 공동구매 글이 등록되었습니다!')));
+    } catch (e) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('오류 발생: $e')));
+    } finally {
+      if (mounted) setState(() => _isUploading = false);
+    }
+  }
+
+  String _formatPrice(int price) => price
+      .toString()
+      .replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+$)'), (m) => '${m[1]},');
 }

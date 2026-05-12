@@ -63,6 +63,39 @@ class ExchangePost {
     required this.createdAt,
     required this.status,
   });
+  factory ExchangePost.fromMap(Map<String, dynamic> data, String documentId) {
+    return ExchangePost(
+      id: documentId,
+      title: data['title'] ?? '',
+      description: data['description'] ?? '',
+      offerItem: data['offerItem'] ?? '',
+      wantItem: data['wantItem'] ?? '',
+      imageUrl: data['imageUrl'] ?? '',
+      authorName: data['authorName'] ?? '익명',
+      location: data['location'] ?? '',
+      walkMinutes: data['walkMinutes'] ?? 0,
+      createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      status: ExchangeStatus.values.firstWhere(
+        (e) => e.name == (data['status'] ?? 'open'),
+        orElse: () => ExchangeStatus.open,
+      ),
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'title': title,
+      'description': description,
+      'offerItem': offerItem,
+      'wantItem': wantItem,
+      'imageUrl': imageUrl,
+      'authorName': authorName,
+      'location': location,
+      'walkMinutes': walkMinutes,
+      'createdAt': FieldValue.serverTimestamp(),
+      'status': status.name,
+    };
+  }
 }
 
 enum ExchangeStatus { open, chatting, done }
@@ -134,6 +167,35 @@ class GatherPost {
   });
 
   bool get isFull => currentMembers >= maxMembers;
+
+  factory GatherPost.fromMap(String id, Map<String, dynamic> data) {
+    return GatherPost(
+      id: id,
+      title: data['title'] ?? '',
+      description: data['description'] ?? '',
+      emoji: data['emoji'] ?? '👥',
+      place: data['place'] ?? '',
+      // 1. Timestamp null 체크: 데이터가 아직 서버에 기록 중일 때 null일 수 있음
+      meetTime: data['meetTime'] != null
+          ? (data['meetTime'] as Timestamp).toDate()
+          : DateTime.now(),
+      maxMembers: data['maxMembers'] ?? 0,
+      currentMembers: data['currentMembers'] ?? 0,
+      authorName: data['authorName'] ?? '',
+      // 2. Enum 매핑 시 예외 처리: 데이터베이스에 엉뚱한 문자열이 있을 경우 대비
+      genderFilter: GenderFilter.values.firstWhere(
+        (e) => e.name == data['genderFilter'],
+        orElse: () => GenderFilter.any,
+      ),
+      ageFilter: AgeFilter.values.firstWhere(
+        (e) => e.name == data['ageFilter'],
+        orElse: () => AgeFilter.any,
+      ),
+      createdAt: data['createdAt'] != null
+          ? (data['createdAt'] as Timestamp).toDate()
+          : DateTime.now(),
+    );
+  }
 }
 
 enum GenderFilter { any, maleOnly, femaleOnly }
