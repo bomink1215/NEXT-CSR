@@ -5,36 +5,137 @@ import '../models/mock_data.dart';
 import '../models/user_store.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-class ChatListScreen extends StatelessWidget {
+class ChatListScreen extends StatefulWidget {
   const ChatListScreen({super.key});
+
+  @override
+  State<ChatListScreen> createState() => _ChatListScreenState();
+}
+
+class _ChatListScreenState extends State<ChatListScreen> {
+  String _selectedFilter = '전체';
+
+  final List<Map<String, String>> _filters = [
+    {'label': '전체', 'type': ''},
+    {'label': '공동구매', 'type': 'groupBuy'},
+    {'label': '물물교환', 'type': 'exchange'},
+    {'label': '모임', 'type': 'gather'},
+  ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('채팅')),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('chatRooms')
-            .where('members', arrayContains: UserStoreProvider.of(context).name)
-            .orderBy('lastMessageTime', descending: true)
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData)
-            return const Center(child: CircularProgressIndicator());
+      body: Column(
+        children: [
+          // 필터 탭
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            child: Row(
+              children: _filters.map((f) {
+                final isSelected = f['label'] == _selectedFilter;
+                Color chipColor;
+                switch (f['type']) {
+                  case 'groupBuy':
+                    chipColor = AppColors.buyColor;
+                    break;
+                  case 'exchange':
+                    chipColor = AppColors.exchangeColor;
+                    break;
+                  case 'gather':
+                    chipColor = AppColors.gatherColor;
+                    break;
+                  default:
+                    chipColor = AppColors.primary;
+                }
+                return GestureDetector(
+                  onTap: () => setState(() => _selectedFilter = f['label']!),
+                  child: Container(
+                    margin: const EdgeInsets.only(right: 8),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: isSelected ? chipColor : AppColors.surface,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: isSelected ? chipColor : AppColors.divider,
+                      ),
+                    ),
+                    child: Text(
+                      f['label']!,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: isSelected
+                            ? Colors.white
+                            : AppColors.textSecondary,
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('chatRooms')
+                  .where('members',
+                      arrayContains: UserStoreProvider.of(context).uid)
+                  .orderBy('lastMessageTime', descending: true)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData)
+                  return const Center(child: CircularProgressIndicator());
 
-          final rooms = snapshot.data!.docs;
-          return ListView.separated(
-            itemCount: rooms.length,
-            separatorBuilder: (_, __) => const Divider(indent: 80),
-            itemBuilder: (context, i) {
-              final doc = rooms[i];
-              final room =
-                  ChatRoom.fromMap(doc.data() as Map<String, dynamic>, doc.id);
-              return _ChatRoomTile(room: room);
-            },
-          );
-        },
+                final allRooms = snapshot.data!.docs;
+                final selectedType = _filters
+                    .firstWhere((f) => f['label'] == _selectedFilter)['type']!;
+                final rooms = selectedType.isEmpty
+                    ? allRooms
+                    : allRooms.where((doc) {
+                        final data = doc.data() as Map<String, dynamic>;
+                        return (data['type'] ?? '') == selectedType;
+                      }).toList();
+
+                if (rooms.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text('💬',
+                            style: TextStyle(fontSize: 40)),
+                        const SizedBox(height: 12),
+                        Text(
+                          _selectedFilter == '전체'
+                              ? '참여 중인 채팅방이 없어요'
+                              : '$_selectedFilter 채팅방이 없어요',
+                          style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textSecondary),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                return ListView.separated(
+                  itemCount: rooms.length,
+                  separatorBuilder: (_, __) =>
+                      const Divider(indent: 80),
+                  itemBuilder: (context, i) {
+                    final doc = rooms[i];
+                    final room = ChatRoom.fromMap(
+                        doc.data() as Map<String, dynamic>, doc.id);
+                    return RepaintBoundary(child: _ChatRoomTile(room: room));
+                  },
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -205,6 +306,158 @@ class ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  Future<void> _confirmComplete(BuildContext context) async {
+    final confirm = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Text('채팅방 종료'),
+            content: const Text('채팅방이 삭제됩니다. 완료하시겠습니까?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('아니요',
+                    style: TextStyle(color: AppColors.textSecondary)),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary),
+                child: const Text('예'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+
+    if (!confirm) return;
+
+    try {
+      final firestore = FirebaseFirestore.instance;
+      // 물물교환 채팅방이면 해당 게시글을 마감(done) 처리
+      if (widget.room.type == ChatRoomType.exchange) {
+        final chatDoc = await firestore
+            .collection('chatRooms')
+            .doc(widget.room.id)
+            .get();
+        final postId = chatDoc.data()?['postId'] as String?;
+        if (postId != null && postId.isNotEmpty) {
+          await firestore
+              .collection('posts')
+              .doc(postId)
+              .update({'status': 'done'});
+        }
+      }
+      await firestore.collection('chatRooms').doc(widget.room.id).delete();
+      if (context.mounted) Navigator.pop(context);
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('오류: $e')));
+      }
+    }
+  }
+
+  Future<void> _confirmLeave(BuildContext context) async {
+    final confirm = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16)),
+            title: const Text('채팅 나가기'),
+            content: const Text('채팅방을 나가시겠습니까?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('아니요',
+                    style: TextStyle(color: AppColors.textSecondary)),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary),
+                child: const Text('예',
+                    style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+
+    if (!confirm) return;
+
+    try {
+      final store = UserStoreProvider.of(context);
+      final firestore = FirebaseFirestore.instance;
+      final roomRef =
+          firestore.collection('chatRooms').doc(widget.room.id);
+
+      // 시스템 메시지: "<이름>님이 나가셨습니다."
+      await roomRef.collection('messages').add({
+        'senderName': 'system',
+        'text': '${store.name}님이 나가셨습니다.',
+        'time': FieldValue.serverTimestamp(),
+      });
+
+      // chatRoom members 에서 본인 UID 제거
+      await roomRef.update({
+        'members': FieldValue.arrayRemove([store.uid]),
+        'lastMessage': '${store.name}님이 나가셨습니다.',
+        'lastMessageTime': FieldValue.serverTimestamp(),
+      });
+
+      // ── 공동구매 채팅방이면 게시글 참여 인원도 감소 ──
+      // 채팅방 ID == 게시글 ID 이므로 widget.room.id 를 그대로 사용
+      if (widget.room.type == ChatRoomType.groupBuy) {
+        await firestore.runTransaction((transaction) async {
+          final postRef =
+              firestore.collection('posts').doc(widget.room.id);
+          final postSnap = await transaction.get(postRef);
+          if (postSnap.exists) {
+            final data = postSnap.data() as Map<String, dynamic>;
+            final current =
+                (data['currentParticipants'] as int?) ?? 1;
+            final max = (data['maxParticipants'] as int?) ?? 2;
+            // 최소 1 (작성자는 항상 남아 있음)
+            final newCount = (current - 1).clamp(1, max);
+            transaction.update(postRef, {
+              'currentParticipants': newCount,
+              'isFull': newCount >= max,
+            });
+          }
+        });
+      }
+
+      // ── 모임 채팅방이면 게시글 참여 인원 감소 + members 배열에서 UID 제거 ──
+      if (widget.room.type == ChatRoomType.gather) {
+        await firestore.runTransaction((transaction) async {
+          final postRef =
+              firestore.collection('posts').doc(widget.room.id);
+          final postSnap = await transaction.get(postRef);
+          if (postSnap.exists) {
+            final data = postSnap.data() as Map<String, dynamic>;
+            final current = (data['currentMembers'] as int?) ?? 1;
+            final max = (data['maxMembers'] as int?) ?? 2;
+            // 최소 1 (작성자는 항상 남아 있음)
+            final newCount = (current - 1).clamp(1, max);
+            transaction.update(postRef, {
+              'currentMembers': newCount,
+              'members': FieldValue.arrayRemove([store.uid]),
+            });
+          }
+        });
+      }
+
+      if (context.mounted) Navigator.pop(context);
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('오류: $e')));
+      }
+    }
+  }
+
   void _send() async {
     final text = _ctrl.text.trim();
     if (text.isEmpty) return;
@@ -239,7 +492,51 @@ class ChatScreenState extends State<ChatScreen> {
       appBar: AppBar(
         title: Text(widget.room.title),
         actions: [
-          IconButton(icon: const Icon(Icons.more_vert), onPressed: () {}),
+          Builder(builder: (ctx) {
+            final store = UserStoreProvider.of(ctx);
+            final isAuthor =
+                store.uid.isNotEmpty && store.uid == widget.room.authorUid;
+            if (isAuthor) {
+              return Padding(
+                padding: const EdgeInsets.only(right: 10),
+                child: ElevatedButton(
+                  onPressed: () => _confirmComplete(ctx),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 18, vertical: 7),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20)),
+                    elevation: 0,
+                  ),
+                  child: const Text('완료',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14)),
+                ),
+              );
+            }
+            return Padding(
+              padding: const EdgeInsets.only(right: 10),
+              child: ElevatedButton(
+                onPressed: () => _confirmLeave(ctx),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 18, vertical: 7),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20)),
+                  elevation: 0,
+                ),
+                child: const Text('나가기',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14)),
+              ),
+            );
+          }),
         ],
       ),
       body: Column(

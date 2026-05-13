@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:gatchi_sapsida/utils/storage_service.dart';
 import '../theme/app_theme.dart';
@@ -22,23 +23,20 @@ class GroupBuyScreen extends StatefulWidget {
 class _GroupBuyScreenState extends State<GroupBuyScreen> {
   String _selectedFilter = '전체';
   final List<String> _filters = ['전체', '식료품', '생활용품', '배달음식'];
+  String _searchQuery = '';
+  final _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final filtered = _selectedFilter == '전체'
-        ? MockData.groupBuyPosts
-        : MockData.groupBuyPosts
-            .where((p) => p.category == _selectedFilter)
-            .toList();
-
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('공동구매'),
-        actions: [
-          IconButton(icon: const Icon(Icons.search), onPressed: () {}),
-        ],
-      ),
+      appBar: AppBar(title: const Text('공동구매')),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showCreateSheet(context),
         backgroundColor: AppColors.buyColor,
@@ -48,9 +46,47 @@ class _GroupBuyScreenState extends State<GroupBuyScreen> {
       ),
       body: Column(
         children: [
-          // 필터 탭
+          // 검색창
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+            child: TextField(
+              controller: _searchController,
+              onChanged: (v) => setState(() => _searchQuery = v),
+              decoration: InputDecoration(
+                hintText: '상품명으로 검색',
+                hintStyle: const TextStyle(color: AppColors.textHint),
+                prefixIcon: const Icon(Icons.search, color: AppColors.textHint),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.close, color: AppColors.textHint),
+                        onPressed: () => setState(() {
+                          _searchQuery = '';
+                          _searchController.clear();
+                        }),
+                      )
+                    : null,
+                filled: true,
+                fillColor: AppColors.surface,
+                contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: AppColors.divider),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: AppColors.divider),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: AppColors.buyColor, width: 1.5),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          // 필터 탭
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
             child: Row(
               children: _filters.map((f) {
                 final isSelected = f == _selectedFilter;
@@ -111,11 +147,47 @@ class _GroupBuyScreenState extends State<GroupBuyScreen> {
                   );
                 }
 
-                final filteredDocs = _selectedFilter == '전체'
+                final uid = UserStoreProvider.of(context).uid;
+                final categoryDocs = _selectedFilter == '전체'
                     ? docs
                     : docs
                         .where((doc) => doc['category'] == _selectedFilter)
                         .toList();
+
+                final filteredDocs = (_searchQuery.isEmpty
+                    ? categoryDocs
+                    : categoryDocs.where((doc) {
+                        final data = doc.data() as Map<String, dynamic>;
+                        final q = _searchQuery.toLowerCase();
+                        return (data['title'] ?? '').toString().toLowerCase().contains(q);
+                      }).toList())
+                  ..sort((a, b) {
+                    final aD = a.data() as Map;
+                    final bD = b.data() as Map;
+                    final aFull = (aD['isFull'] == true) ||
+                        ((aD['currentParticipants'] ?? 0) >=
+                            (aD['maxParticipants'] ?? 1));
+                    final bFull = (bD['isFull'] == true) ||
+                        ((bD['currentParticipants'] ?? 0) >=
+                            (bD['maxParticipants'] ?? 1));
+                    // 마감 여부 우선
+                    if (!aFull && bFull) return -1;
+                    if (aFull && !bFull) return 1;
+                    // 같은 상태면 내 글 먼저
+                    final aIsMe = aD['authorUid'] == uid;
+                    final bIsMe = bD['authorUid'] == uid;
+                    if (aIsMe && !bIsMe) return -1;
+                    if (!aIsMe && bIsMe) return 1;
+                    return 0;
+                  });
+
+                if (filteredDocs.isEmpty) {
+                  return EmptyState(
+                    emoji: '🔍',
+                    title: '검색 결과가 없어요',
+                    subtitle: '"$_searchQuery"에 해당하는 게시글이 없습니다.',
+                  );
+                }
 
                 return ListView.separated(
                   padding:
@@ -124,22 +196,24 @@ class _GroupBuyScreenState extends State<GroupBuyScreen> {
                   separatorBuilder: (_, __) => const SizedBox(height: 10),
                   itemBuilder: (context, i) {
                     final data = filteredDocs[i].data() as Map<String, dynamic>;
-
-                    return _GroupBuyCard(
-                      post: GroupBuyPost(
-                        id: filteredDocs[i].id,
-                        title: data['title'] ?? '',
-                        category: data['category'] ?? '기타',
-                        imageUrl: '', // 필요시 데이터 추가
-                        totalPrice: data['totalPrice'] ?? 0,
-                        unitPrice: data['unitPrice'] ?? 0,
-                        maxParticipants: data['maxParticipants'] ?? 2,
-                        currentParticipants: data['currentParticipants'] ?? 1,
-                        walkMinutes: 5, // 임시값
-                        location: data['location'] ?? '안암동',
-                        authorName: data['authorName'] ?? '익명',
-                        createdAt: (data['createdAt'] as Timestamp).toDate(),
-                        isDelivery: data['category'] == '배달음식',
+                    return RepaintBoundary(
+                      child: _GroupBuyCard(
+                        post: GroupBuyPost(
+                          id: filteredDocs[i].id,
+                          title: data['title'] ?? '',
+                          category: data['category'] ?? '기타',
+                          imageUrl: data['imageUrl'] ?? '',
+                          totalPrice: data['totalPrice'] ?? 0,
+                          unitPrice: data['unitPrice'] ?? 0,
+                          maxParticipants: data['maxParticipants'] ?? 2,
+                          currentParticipants: data['currentParticipants'] ?? 1,
+                          walkMinutes: 5,
+                          location: data['location'] ?? '안암동',
+                          authorName: data['authorName'] ?? '익명',
+                          authorUid: data['authorUid'] ?? '',
+                          createdAt: (data['createdAt'] as Timestamp).toDate(),
+                          isDelivery: data['category'] == '배달음식',
+                        ),
                       ),
                     );
                   },
@@ -170,22 +244,49 @@ class _GroupBuyCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final userStore = UserStoreProvider.of(context);
-    final isAuthor = userStore.name.isNotEmpty &&
-        userStore.name.trim() == post.authorName.trim();
+    final isAuthor = userStore.uid.isNotEmpty &&
+        userStore.uid == post.authorUid;
 
     return GestureDetector(
       onTap: () => _showDetail(context),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: isAuthor
+              ? AppColors.primary.withOpacity(0.06)
+              : post.isFull
+                  ? AppColors.textHint.withOpacity(0.07)
+                  : AppColors.surface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-              color: post.isFull ? AppColors.divider : AppColors.divider),
+            color: isAuthor
+                ? AppColors.primary.withOpacity(0.3)
+                : post.isFull
+                    ? AppColors.textHint.withOpacity(0.25)
+                    : AppColors.divider,
+          ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (post.imageUrl.isNotEmpty) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: CachedNetworkImage(
+                  imageUrl: post.imageUrl,
+                  width: double.infinity,
+                  height: 150,
+                  fit: BoxFit.cover,
+                  placeholder: (_, __) => Container(
+                    height: 150,
+                    color: AppColors.cardBg,
+                    child: const Center(child: CircularProgressIndicator()),
+                  ),
+                  errorWidget: (_, __, ___) => const SizedBox.shrink(),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
             Row(
               children: [
                 TagBadge(
@@ -199,12 +300,6 @@ class _GroupBuyCard extends StatelessWidget {
                   TagBadge(label: '🛵 배달소분', color: AppColors.secondary),
                 const Spacer(),
                 WalkBadge(minutes: post.walkMinutes),
-                if (isAuthor)
-                  IconButton(
-                      icon: const Icon(Icons.delete_outline,
-                          size: 20, color: AppColors.error),
-                      onPressed: () =>
-                          _deletePost(context, post.id, post.authorName)),
               ],
             ),
             const SizedBox(height: 10),
@@ -247,6 +342,7 @@ class _GroupBuyCard extends StatelessWidget {
             const SizedBox(height: 12),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -269,33 +365,37 @@ class _GroupBuyCard extends StatelessWidget {
                     ),
                   ],
                 ),
-                if (!post.isFull)
-                  ElevatedButton(
-                    onPressed: () => _showDetail(context),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.buyColor,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 20, vertical: 10),
-                    ),
-                    child: const Text('참여하기'),
-                  )
-                else
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: AppColors.cardBg,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Text(
-                      '마감됨',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textHint,
+                if (isAuthor)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextButton(
+                        onPressed: () => _showEditSheet(context),
+                        style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                        child: const Text('수정',
+                            style: TextStyle(
+                                fontSize: 13,
+                                color: AppColors.primary,
+                                fontWeight: FontWeight.w600)),
                       ),
-                    ),
-                  ),
+                      TextButton(
+                        onPressed: () =>
+                            _deletePost(context, post.id, post.authorName),
+                        style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                        child: const Text('삭제',
+                            style: TextStyle(
+                                fontSize: 13,
+                                color: AppColors.error,
+                                fontWeight: FontWeight.w600)),
+                      ),
+                    ],
+                  )
               ],
             ),
           ],
@@ -328,20 +428,19 @@ class _GroupBuyCard extends StatelessWidget {
 
     if (!confirm) return;
     try {
-      WriteBatch batch = firestore.batch();
-
+      final batch = firestore.batch();
       batch.delete(firestore.collection('posts').doc(postId));
       batch.delete(firestore.collection('chatRooms').doc(postId));
-
       await batch.commit();
 
       if (!context.mounted) return;
-      Navigator.pop(context);
+      // Navigator.pop은 호출하지 않음 — StreamBuilder가 자동으로 목록에서 제거
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('게시글이 삭제되었습니다.')));
     } catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('삭제 실패: $e')));
+      if (context.mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('삭제 실패: $e')));
     }
   }
 
@@ -351,6 +450,15 @@ class _GroupBuyCard extends StatelessWidget {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _GroupBuyDetail(post: post),
+    );
+  }
+
+  void _showEditSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _EditGroupBuySheet(post: post),
     );
   }
 
@@ -367,7 +475,7 @@ class _GroupBuyDetail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: MediaQuery.of(context).size.height * 0.7,
+      height: MediaQuery.of(context).size.height * 0.75,
       decoration: const BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -385,11 +493,31 @@ class _GroupBuyDetail extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: Padding(
+            child: SingleChildScrollView(
               padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // 이미지
+                  if (post.imageUrl.isNotEmpty) ...[
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: CachedNetworkImage(
+                        imageUrl: post.imageUrl,
+                        width: double.infinity,
+                        height: 200,
+                        fit: BoxFit.cover,
+                        placeholder: (_, __) => Container(
+                          height: 200,
+                          color: AppColors.cardBg,
+                          child: const Center(
+                              child: CircularProgressIndicator()),
+                        ),
+                        errorWidget: (_, __, ___) => const SizedBox.shrink(),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
                   Row(
                     children: [
                       TagBadge(label: post.category, color: AppColors.buyColor),
@@ -443,22 +571,48 @@ class _GroupBuyDetail extends StatelessWidget {
                     max: post.maxParticipants,
                     color: AppColors.buyColor,
                   ),
-                  const Spacer(),
-                  if (!post.isFull)
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: () async {
-                          await _handleJoin(context, post);
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.buyColor,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
+                  const SizedBox(height: 24),
+                  Builder(builder: (ctx) {
+                    final store = UserStoreProvider.of(ctx);
+                    final isAuthor = store.uid.isNotEmpty &&
+                        store.uid == post.authorUid;
+                    // 내가 만든 글 → 배너 표시
+                    if (isAuthor) {
+                      return Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        child:
-                            const Text('참여하기', style: TextStyle(fontSize: 16)),
-                      ),
-                    ),
+                        child: const Center(
+                          child: Text(
+                            '내가 올린 공동구매 글',
+                            style: TextStyle(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15,
+                            ),
+                          ),
+                        ),
+                      );
+                    }
+                    if (!post.isFull) {
+                      return SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: () async => await _handleJoin(ctx, post),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.buyColor,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          ),
+                          child: const Text('참여하기',
+                              style: TextStyle(fontSize: 16)),
+                        ),
+                      );
+                    }
+                    return const SizedBox.shrink();
+                  }),
                 ],
               ),
             ),
@@ -471,6 +625,34 @@ class _GroupBuyDetail extends StatelessWidget {
   Future<void> _handleJoin(BuildContext context, GroupBuyPost post) async {
     final firestore = FirebaseFirestore.instance;
     final userStore = UserStoreProvider.of(context);
+
+    // ── 중복 참여 사전 체크 (transaction 오류 방지) ──
+    final existingChat =
+        await firestore.collection('chatRooms').doc(post.id).get();
+    if (existingChat.exists) {
+      final currentMembers = List<String>.from(
+          (existingChat.data() as Map<String, dynamic>)['members'] ?? []);
+      if (currentMembers.contains(userStore.uid)) {
+        if (!context.mounted) return;
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16)),
+            content: const Text('이미 참여한 공동구매입니다.',
+                style: TextStyle(fontSize: 15)),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('확인',
+                    style: TextStyle(color: AppColors.buyColor)),
+              ),
+            ],
+          ),
+        );
+        return;
+      }
+    }
 
     try {
       List<String> updatedMembers = [];
@@ -491,11 +673,9 @@ class _GroupBuyDetail extends StatelessWidget {
             : []);
 
         if (updatedMembers.isEmpty) {
-          updatedMembers.add(post.authorName);
+          updatedMembers.add(post.authorUid);
         }
-        if (!updatedMembers.contains(userStore.name)) {
-          updatedMembers.add(userStore.name);
-        }
+        updatedMembers.add(userStore.uid);
 
         transaction.update(postRef, {
           'currentParticipants': current + 1,
@@ -508,6 +688,7 @@ class _GroupBuyDetail extends StatelessWidget {
               'postId': post.id,
               'title': post.title,
               'members': updatedMembers,
+              'authorUid': post.authorUid,
               'lastMessage': "${userStore.name}님이 참여하셨습니다.",
               'lastMessageTime': FieldValue.serverTimestamp(),
               'type': 'groupBuy',
@@ -516,11 +697,11 @@ class _GroupBuyDetail extends StatelessWidget {
             },
             SetOptions(merge: true));
 
-        // 시스템 메시지 추가 (일정 조율 독려)
+        // 시스템 메시지
         transaction.set(chatRef.collection('messages').doc(), {
-          'senderId': 'system',
-          'text': "${userStore.name}님이 참여했습니다. 일정을 정해보세요!",
-          'timestamp': FieldValue.serverTimestamp(),
+          'senderName': 'system',
+          'text': "${userStore.name}님이 참여하셨습니다.",
+          'time': FieldValue.serverTimestamp(),
         });
       });
 
@@ -539,14 +720,29 @@ class _GroupBuyDetail extends StatelessWidget {
               type: ChatRoomType.groupBuy,
               unreadCount: 0,
               members: updatedMembers,
+              authorUid: post.authorUid,
             ),
           ),
         ),
       );
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('오류: $e')));
+      final msg = e.toString().replaceFirst('Exception: ', '');
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          content: Text(msg, style: const TextStyle(fontSize: 15)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('확인',
+                  style: TextStyle(color: AppColors.buyColor)),
+            ),
+          ],
+        ),
+      );
     }
   }
 
@@ -826,6 +1022,7 @@ class _CreateGroupBuySheetState extends State<_CreateGroupBuySheet> {
         'currentParticipants': 1,
         'location': userStore.location,
         'authorName': userStore.name,
+        'authorUid': userStore.uid,
         'createdAt': FieldValue.serverTimestamp(),
         'isFull': false,
         'members': [userStore.name],
@@ -846,4 +1043,217 @@ class _CreateGroupBuySheetState extends State<_CreateGroupBuySheet> {
   String _formatPrice(int price) => price
       .toString()
       .replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+$)'), (m) => '${m[1]},');
+}
+
+// ── 공동구매 수정 시트 ─────────────────────────────────────────
+class _EditGroupBuySheet extends StatefulWidget {
+  final GroupBuyPost post;
+  const _EditGroupBuySheet({required this.post});
+
+  @override
+  State<_EditGroupBuySheet> createState() => _EditGroupBuySheetState();
+}
+
+class _EditGroupBuySheetState extends State<_EditGroupBuySheet> {
+  late final TextEditingController _titleController;
+  late final TextEditingController _totalPriceController;
+  late String _type;
+  late int _members;
+  bool _isSaving = false;
+
+  final List<String> _types = ['식료품', '생활용품', '배달음식'];
+
+  @override
+  void initState() {
+    super.initState();
+    _titleController = TextEditingController(text: widget.post.title);
+    _totalPriceController =
+        TextEditingController(text: widget.post.totalPrice.toString());
+    _type = widget.post.category;
+    _members = widget.post.maxParticipants;
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _totalPriceController.dispose();
+    super.dispose();
+  }
+
+  int get _unitPrice {
+    final total =
+        int.tryParse(_totalPriceController.text.replaceAll(',', '')) ?? 0;
+    return _members == 0 ? 0 : (total / _members).ceil();
+  }
+
+  Future<void> _save() async {
+    if (_titleController.text.trim().isEmpty ||
+        _totalPriceController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('정보를 모두 입력해주세요.')));
+      return;
+    }
+    setState(() => _isSaving = true);
+    try {
+      final totalPrice =
+          int.parse(_totalPriceController.text.replaceAll(',', ''));
+      await FirebaseFirestore.instance
+          .collection('posts')
+          .doc(widget.post.id)
+          .update({
+        'title': _titleController.text.trim(),
+        'category': _type,
+        'totalPrice': totalPrice,
+        'unitPrice': _unitPrice,
+        'maxParticipants': _members,
+      });
+      if (!mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('✅ 수정되었습니다.')));
+    } catch (e) {
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('수정 실패: $e')));
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.75,
+      padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom),
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        children: [
+          Container(
+            margin: const EdgeInsets.only(top: 12),
+            width: 40, height: 4,
+            decoration: BoxDecoration(
+                color: AppColors.divider,
+                borderRadius: BorderRadius.circular(2)),
+          ),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(20, 16, 20, 4),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text('공동구매 수정',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+            ),
+          ),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 8),
+                  const Text('제목',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600,
+                          color: AppColors.textSecondary)),
+                  const SizedBox(height: 8),
+                  TextField(controller: _titleController,
+                      decoration: const InputDecoration(hintText: '공동구매 제목')),
+                  const SizedBox(height: 16),
+                  const Text('카테고리',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600,
+                          color: AppColors.textSecondary)),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    children: _types.map((t) {
+                      final sel = t == _type;
+                      return GestureDetector(
+                        onTap: () => setState(() => _type = t),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: sel ? AppColors.buyColor : AppColors.cardBg,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                                color: sel ? AppColors.buyColor : AppColors.divider),
+                          ),
+                          child: Text(t,
+                              style: TextStyle(
+                                  fontSize: 13, fontWeight: FontWeight.w600,
+                                  color: sel ? Colors.white : AppColors.textSecondary)),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('총 금액',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600,
+                          color: AppColors.textSecondary)),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _totalPriceController,
+                    keyboardType: TextInputType.number,
+                    onChanged: (_) => setState(() {}),
+                    decoration: InputDecoration(
+                      hintText: '원',
+                      suffixText: '1인 ${_unitPrice}원',
+                      suffixStyle: const TextStyle(
+                          color: AppColors.primary, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      const Text('인원수',
+                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600,
+                              color: AppColors.textSecondary)),
+                      const Spacer(),
+                      IconButton(
+                        onPressed: _members > 2
+                            ? () => setState(() => _members--)
+                            : null,
+                        icon: const Icon(Icons.remove_circle_outline),
+                        color: AppColors.buyColor,
+                      ),
+                      Text('$_members명',
+                          style: const TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.w700)),
+                      IconButton(
+                        onPressed: _members < 10
+                            ? () => setState(() => _members++)
+                            : null,
+                        icon: const Icon(Icons.add_circle_outline),
+                        color: AppColors.buyColor,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: _isSaving ? null : _save,
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.buyColor,
+                          padding: const EdgeInsets.symmetric(vertical: 16)),
+                      child: _isSaving
+                          ? const SizedBox(
+                              height: 20, width: 20,
+                              child: CircularProgressIndicator(
+                                  color: Colors.white, strokeWidth: 2))
+                          : const Text('수정 완료',
+                              style: TextStyle(fontSize: 16)),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

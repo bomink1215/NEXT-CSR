@@ -13,6 +13,7 @@ class GroupBuyPost {
   final int walkMinutes; // 도보 거리(분)
   final String location;
   final String authorName;
+  final String authorUid;
   final DateTime createdAt;
   final bool isDelivery;
 
@@ -28,6 +29,7 @@ class GroupBuyPost {
     required this.walkMinutes,
     required this.location,
     required this.authorName,
+    this.authorUid = '',
     required this.createdAt,
     required this.isDelivery,
   });
@@ -45,6 +47,7 @@ class ExchangePost {
   final String wantItem;
   final String imageUrl;
   final String authorName;
+  final String authorUid;
   final String location;
   final int walkMinutes;
   final DateTime createdAt;
@@ -58,6 +61,7 @@ class ExchangePost {
     required this.wantItem,
     required this.imageUrl,
     required this.authorName,
+    this.authorUid = '',
     required this.location,
     required this.walkMinutes,
     required this.createdAt,
@@ -72,6 +76,7 @@ class ExchangePost {
       wantItem: data['wantItem'] ?? '',
       imageUrl: data['imageUrl'] ?? '',
       authorName: data['authorName'] ?? '익명',
+      authorUid: data['authorUid'] ?? '',
       location: data['location'] ?? '',
       walkMinutes: data['walkMinutes'] ?? 0,
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
@@ -112,6 +117,7 @@ class RoomReview {
   final bool isUnlocked;
   final int unlockPoints;
   final String authorName;
+  final String authorUid;
   final DateTime createdAt;
 
   RoomReview({
@@ -125,6 +131,7 @@ class RoomReview {
     required this.isUnlocked,
     required this.unlockPoints,
     required this.authorName,
+    this.authorUid = '',
     required this.createdAt,
   });
 }
@@ -147,8 +154,10 @@ class GatherPost {
   final int maxMembers;
   final int currentMembers;
   final String authorName;
+  final String authorUid;
   final GenderFilter genderFilter;
   final AgeFilter ageFilter;
+  final String category;
   final DateTime createdAt;
 
   GatherPost({
@@ -161,8 +170,10 @@ class GatherPost {
     required this.maxMembers,
     required this.currentMembers,
     required this.authorName,
+    this.authorUid = '',
     required this.genderFilter,
     required this.ageFilter,
+    this.category = '기타',
     required this.createdAt,
   });
 
@@ -182,6 +193,7 @@ class GatherPost {
       maxMembers: data['maxMembers'] ?? 0,
       currentMembers: data['currentMembers'] ?? 0,
       authorName: data['authorName'] ?? '',
+      authorUid: data['authorUid'] ?? '',
       // 2. Enum 매핑 시 예외 처리: 데이터베이스에 엉뚱한 문자열이 있을 경우 대비
       genderFilter: GenderFilter.values.firstWhere(
         (e) => e.name == data['genderFilter'],
@@ -191,6 +203,7 @@ class GatherPost {
         (e) => e.name == data['ageFilter'],
         orElse: () => AgeFilter.any,
       ),
+      category: data['category'] ?? '기타',
       createdAt: data['createdAt'] != null
           ? (data['createdAt'] as Timestamp).toDate()
           : DateTime.now(),
@@ -212,6 +225,7 @@ class ChatRoom {
   final String avatarEmoji;
   final ChatRoomType type;
   final List<String> members;
+  final String authorUid;
 
   ChatRoom({
     required this.id,
@@ -222,6 +236,7 @@ class ChatRoom {
     required this.avatarEmoji,
     required this.type,
     required this.members,
+    this.authorUid = '',
   });
 
   factory ChatRoom.fromMap(Map<String, dynamic> data, String documentId) {
@@ -238,6 +253,7 @@ class ChatRoom {
         orElse: () => ChatRoomType.gather,
       ),
       members: List<String>.from(data['members'] ?? []),
+      authorUid: data['authorUid'] ?? '',
     );
   }
 }

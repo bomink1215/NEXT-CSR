@@ -18,6 +18,7 @@ void main() async {
       statusBarIconBrightness: Brightness.dark,
     ),
   );
+
   runApp(MultiProvider(
     providers: [ChangeNotifierProvider(create: (_) => UserStore())],
     child: const GatchiSapsidaApp(),
@@ -29,8 +30,9 @@ class GatchiSapsidaApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final store = UserStore();
     return UserStoreProvider(
-      store: UserStore(),
+      store: store,
       child: MaterialApp(
         title: '같이삽시다',
         debugShowCheckedModeBanner: false,

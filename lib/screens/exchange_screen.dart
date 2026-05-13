@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:gatchi_sapsida/models/user_store.dart';
@@ -10,19 +11,28 @@ import '../models/models.dart';
 import '../models/mock_data.dart';
 import '../widgets/common_widgets.dart';
 
-class ExchangeScreen extends StatelessWidget {
+class ExchangeScreen extends StatefulWidget {
   const ExchangeScreen({super.key});
+
+  @override
+  State<ExchangeScreen> createState() => _ExchangeScreenState();
+}
+
+class _ExchangeScreenState extends State<ExchangeScreen> {
+  String _searchQuery = '';
+  final _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('물물교환'),
-        actions: [
-          IconButton(icon: const Icon(Icons.search), onPressed: () {}),
-        ],
-      ),
+      appBar: AppBar(title: const Text('물물교환')),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showCreateSheet(context),
         backgroundColor: AppColors.exchangeColor,
@@ -64,6 +74,43 @@ class ExchangeScreen extends StatelessWidget {
               ],
             ),
           ),
+          // 검색창
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+            child: TextField(
+              controller: _searchController,
+              onChanged: (v) => setState(() => _searchQuery = v),
+              decoration: InputDecoration(
+                hintText: '물건명으로 검색',
+                hintStyle: const TextStyle(color: AppColors.textHint),
+                prefixIcon: const Icon(Icons.search, color: AppColors.textHint),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.close, color: AppColors.textHint),
+                        onPressed: () => setState(() {
+                          _searchQuery = '';
+                          _searchController.clear();
+                        }),
+                      )
+                    : null,
+                filled: true,
+                fillColor: AppColors.surface,
+                contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: AppColors.divider),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: AppColors.divider),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: AppColors.exchangeColor, width: 1.5),
+                ),
+              ),
+            ),
+          ),
           const SizedBox(height: 12),
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
@@ -82,38 +129,71 @@ class ExchangeScreen extends StatelessWidget {
                   }
 
                   final docs = snapshot.data!.docs;
+                  final uid = UserStoreProvider.of(context).uid;
 
-                  if (docs.isEmpty) {
-                    return const EmptyState(
-                      emoji: '🔄',
-                      title: '등록된 교환글이 없어요',
-                      subtitle: '안 쓰는 물건을 이웃과 바꿔보세요!',
-                    );
+                  final filteredDocs = (_searchQuery.isEmpty
+                      ? docs
+                      : docs.where((doc) {
+                          final data = doc.data() as Map<String, dynamic>;
+                          final q = _searchQuery.toLowerCase();
+                          return (data['title'] ?? '').toString().toLowerCase().contains(q) ||
+                              (data['offerItem'] ?? '').toString().toLowerCase().contains(q) ||
+                              (data['wantItem'] ?? '').toString().toLowerCase().contains(q);
+                        }).toList())
+                    ..sort((a, b) {
+                      final aD = a.data() as Map;
+                      final bD = b.data() as Map;
+                      final aDone = aD['status'] == 'done';
+                      final bDone = bD['status'] == 'done';
+                      if (!aDone && bDone) return -1;
+                      if (aDone && !bDone) return 1;
+                      final aIsMe = aD['authorUid'] == uid;
+                      final bIsMe = bD['authorUid'] == uid;
+                      if (aIsMe && !bIsMe) return -1;
+                      if (!aIsMe && bIsMe) return 1;
+                      return 0;
+                    });
+
+                  if (filteredDocs.isEmpty) {
+                    return _searchQuery.isEmpty
+                        ? const EmptyState(
+                            emoji: '🔄',
+                            title: '등록된 교환글이 없어요',
+                            subtitle: '안 쓰는 물건을 이웃과 바꿔보세요!',
+                          )
+                        : EmptyState(
+                            emoji: '🔍',
+                            title: '검색 결과가 없어요',
+                            subtitle: '"$_searchQuery"에 해당하는 교환글이 없습니다.',
+                          );
                   }
 
                   return ListView.separated(
                     padding:
                         const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-                    itemCount: docs.length,
+                    itemCount: filteredDocs.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 10),
                     itemBuilder: (context, i) {
-                      final data = docs[i].data() as Map<String, dynamic>;
-
-                      return _ExchangeCard(
-                        post: ExchangePost(
-                          id: docs[i].id,
-                          title: data['title'] ?? '',
-                          description: data['description'] ?? '',
-                          offerItem: data['offerItem'] ?? '',
-                          wantItem: data['wantItem'] ?? '',
-                          imageUrl: data['imageUrl'] ?? '',
-                          walkMinutes: 5, // 임시값
-                          location: data['location'] ?? '안암동',
-                          authorName: data['authorName'] ?? '익명',
-                          createdAt: (data['createdAt'] as Timestamp).toDate(),
-                          status: data['status'] == 'completed'
-                              ? ExchangeStatus.done
-                              : ExchangeStatus.open, // 임시값
+                      final data = filteredDocs[i].data() as Map<String, dynamic>;
+                      return RepaintBoundary(
+                        child: _ExchangeCard(
+                          post: ExchangePost(
+                            id: filteredDocs[i].id,
+                            title: data['title'] ?? '',
+                            description: data['description'] ?? '',
+                            offerItem: data['offerItem'] ?? '',
+                            wantItem: data['wantItem'] ?? '',
+                            imageUrl: data['imageUrl'] ?? '',
+                            walkMinutes: 5,
+                            location: data['location'] ?? '안암동',
+                            authorName: data['authorName'] ?? '익명',
+                            authorUid: data['authorUid'] ?? '',
+                            createdAt: (data['createdAt'] as Timestamp).toDate(),
+                            status: (data['status'] == 'done' ||
+                                    data['status'] == 'completed')
+                                ? ExchangeStatus.done
+                                : ExchangeStatus.open,
+                          ),
                         ),
                       );
                     },
@@ -170,7 +250,8 @@ class _ExchangeCardState extends State<_ExchangeCard> {
   @override
   Widget build(BuildContext context) {
     final userStore = UserStoreProvider.of(context);
-    final bool isAuthor = widget.post.authorName == userStore.name;
+    final bool isAuthor = userStore.uid.isNotEmpty &&
+        userStore.uid == widget.post.authorUid;
 
     return GestureDetector(
       onTap: () => _showDetail(context),
@@ -178,41 +259,46 @@ class _ExchangeCardState extends State<_ExchangeCard> {
         padding: const EdgeInsets.all(16),
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: isAuthor
+              ? AppColors.exchangeColor.withOpacity(0.06)
+              : widget.post.status == ExchangeStatus.done
+                  ? AppColors.textHint.withOpacity(0.07)
+                  : AppColors.surface,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.divider),
+          border: Border.all(
+            color: isAuthor
+                ? AppColors.exchangeColor.withOpacity(0.35)
+                : widget.post.status == ExchangeStatus.done
+                    ? AppColors.textHint.withOpacity(0.25)
+                    : AppColors.divider,
+          ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (widget.post.imageUrl.isNotEmpty) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: CachedNetworkImage(
+                  imageUrl: widget.post.imageUrl,
+                  width: double.infinity,
+                  height: 150,
+                  fit: BoxFit.cover,
+                  placeholder: (_, __) => Container(
+                    height: 150,
+                    color: AppColors.cardBg,
+                    child: const Center(child: CircularProgressIndicator()),
+                  ),
+                  errorWidget: (_, __, ___) => const SizedBox.shrink(),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
             Row(
               children: [
                 TagBadge(label: _statusLabel, color: _statusColor),
                 const Spacer(),
                 WalkBadge(minutes: widget.post.walkMinutes),
-                if (isAuthor)
-                  PopupMenuButton<String>(
-                    icon: const Icon(Icons.more_vert,
-                        color: AppColors.textHint, size: 20),
-                    onSelected: (value) {
-                      if (value == 'complete') {
-                        _completeExchange(context, widget.post.id);
-                      } else if (value == 'delete') {
-                        _showDeleteConfirm(context, widget.post);
-                      }
-                    },
-                    itemBuilder: (context) => [
-                      const PopupMenuItem(
-                        value: 'complete',
-                        child: Text('교환 완료로 변경'),
-                      ),
-                      const PopupMenuItem(
-                        value: 'delete',
-                        child:
-                            Text('삭제하기', style: TextStyle(color: Colors.red)),
-                      ),
-                    ],
-                  ),
               ],
             ),
             const SizedBox(height: 12),
@@ -278,6 +364,33 @@ class _ExchangeCardState extends State<_ExchangeCard> {
                 Text(widget.post.location,
                     style: const TextStyle(
                         fontSize: 12, color: AppColors.textHint)),
+                if (isAuthor) ...[
+                  const Spacer(),
+                  TextButton(
+                    onPressed: () => _showEditSheet(context),
+                    style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                    child: const Text('수정',
+                        style: TextStyle(
+                            fontSize: 13,
+                            color: AppColors.exchangeColor,
+                            fontWeight: FontWeight.w600)),
+                  ),
+                  TextButton(
+                    onPressed: () => _showDeleteConfirm(context, widget.post),
+                    style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                    child: const Text('삭제',
+                        style: TextStyle(
+                            fontSize: 13,
+                            color: AppColors.error,
+                            fontWeight: FontWeight.w600)),
+                  ),
+                ],
               ],
             ),
           ],
@@ -292,6 +405,15 @@ class _ExchangeCardState extends State<_ExchangeCard> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _ExchangeDetail(post: widget.post),
+    );
+  }
+
+  void _showEditSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _EditExchangeSheet(post: widget.post),
     );
   }
 
@@ -422,7 +544,7 @@ class _ExchangeDetail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: MediaQuery.of(context).size.height * 0.6,
+      height: MediaQuery.of(context).size.height * 0.75,
       decoration: const BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -438,11 +560,31 @@ class _ExchangeDetail extends StatelessWidget {
                 borderRadius: BorderRadius.circular(2)),
           ),
           Expanded(
-            child: Padding(
+            child: SingleChildScrollView(
               padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // 이미지
+                  if (post.imageUrl.isNotEmpty) ...[
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: CachedNetworkImage(
+                        imageUrl: post.imageUrl,
+                        width: double.infinity,
+                        height: 200,
+                        fit: BoxFit.cover,
+                        placeholder: (_, __) => Container(
+                          height: 200,
+                          color: AppColors.cardBg,
+                          child: const Center(
+                              child: CircularProgressIndicator()),
+                        ),
+                        errorWidget: (_, __, ___) => const SizedBox.shrink(),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
                   Text(post.title,
                       style: const TextStyle(
                           fontSize: 20, fontWeight: FontWeight.w800)),
@@ -474,8 +616,29 @@ class _ExchangeDetail extends StatelessWidget {
                               icon: '🙏')),
                     ],
                   ),
-                  const Spacer(),
-                  SizedBox(
+                  const SizedBox(height: 24),
+                  Builder(builder: (ctx) {
+                    final store = UserStoreProvider.of(ctx);
+                    final isAuthor = store.uid.isNotEmpty &&
+                        store.uid == post.authorUid;
+                    if (isAuthor) {
+                      return Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        decoration: BoxDecoration(
+                          color: AppColors.exchangeColor.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Center(
+                          child: Text('내가 올린 물물교환 글',
+                              style: TextStyle(
+                                  color: AppColors.exchangeColor,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 15)),
+                        ),
+                      );
+                    }
+                    return SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
                       onPressed: () async {
@@ -484,6 +647,33 @@ class _ExchangeDetail extends StatelessWidget {
 
                         try {
                           final String chatId = "${post.id}_${userStore.name}";
+
+                          // ── 중복 참여 사전 체크 ──
+                          final existingChat = await firestore
+                              .collection('chatRooms')
+                              .doc(chatId)
+                              .get();
+                          if (existingChat.exists) {
+                            if (!context.mounted) return;
+                            showDialog(
+                              context: context,
+                              builder: (ctx) => AlertDialog(
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16)),
+                                content: const Text('이미 참여한 물물교환입니다.',
+                                    style: TextStyle(fontSize: 15)),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(ctx),
+                                    child: const Text('확인',
+                                        style: TextStyle(
+                                            color: AppColors.exchangeColor)),
+                                  ),
+                                ],
+                              ),
+                            );
+                            return;
+                          }
 
                           await firestore.runTransaction((transaction) async {
                             DocumentReference postRef =
@@ -496,22 +686,24 @@ class _ExchangeDetail extends StatelessWidget {
                             transaction.set(chatRef, {
                               'id': chatId,
                               'title': '${post.offerItem} ↔ ${post.wantItem}',
-                              'lastMessage': '물물교환 채팅이 시작되었습니다.',
+                              'lastMessage':
+                                  '${userStore.name}님이 참여하셨습니다.',
                               'lastMessageTime': FieldValue.serverTimestamp(),
                               'unreadCount': 0,
                               'type': 'exchange',
-                              'members': [post.authorName, userStore.name],
+                              'members': [post.authorUid, userStore.uid],
                               'avatarEmoji': '🔄',
+                              'authorUid': post.authorUid,
+                              'postId': post.id,
                             });
 
                             DocumentReference msgRef =
                                 chatRef.collection('messages').doc();
                             transaction.set(msgRef, {
-                              'text': '물물교환 채팅방에 입장하셨습니다.\n📍 일정을 정해보아요!',
-                              'senderId': 'system',
-                              'isMe': false,
-                              'isSystem': true,
-                              'timestamp': FieldValue.serverTimestamp(),
+                              'text':
+                                  '${userStore.name}님이 참여하셨습니다.',
+                              'senderName': 'system',
+                              'time': FieldValue.serverTimestamp(),
                             });
                           });
 
@@ -530,6 +722,7 @@ class _ExchangeDetail extends StatelessWidget {
                                   avatarEmoji: '🔄',
                                   type: ChatRoomType.exchange,
                                   members: [post.authorName, userStore.name],
+                                  authorUid: post.authorUid,
                                 ),
                               ),
                             ),
@@ -547,7 +740,8 @@ class _ExchangeDetail extends StatelessWidget {
                       label: const Text('채팅으로 교환 제안하기',
                           style: TextStyle(fontSize: 15, color: Colors.white)),
                     ),
-                  ),
+                  );
+                  }),
                 ],
               ),
             ),
@@ -616,6 +810,7 @@ class _CreateExchangeSheetState extends State<_CreateExchangeSheet> {
         'imageUrl': imageUrl,
         'status': ExchangeStatus.open.name,
         'authorName': userStore.name,
+        'authorUid': userStore.uid,
         'createdAt': FieldValue.serverTimestamp(),
         'location': userStore.location,
       });
@@ -725,6 +920,149 @@ class _CreateExchangeSheetState extends State<_CreateExchangeSheet> {
                     ),
                   ),
                   const SizedBox(height: 20),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── 물물교환 수정 시트 ─────────────────────────────────────────
+class _EditExchangeSheet extends StatefulWidget {
+  final ExchangePost post;
+  const _EditExchangeSheet({required this.post});
+
+  @override
+  State<_EditExchangeSheet> createState() => _EditExchangeSheetState();
+}
+
+class _EditExchangeSheetState extends State<_EditExchangeSheet> {
+  late final TextEditingController _offerController;
+  late final TextEditingController _wantController;
+  late final TextEditingController _descController;
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _offerController = TextEditingController(text: widget.post.offerItem);
+    _wantController = TextEditingController(text: widget.post.wantItem);
+    _descController = TextEditingController(text: widget.post.description);
+  }
+
+  @override
+  void dispose() {
+    _offerController.dispose();
+    _wantController.dispose();
+    _descController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (_offerController.text.trim().isEmpty ||
+        _wantController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('드릴 물건과 원하는 물건을 입력해주세요.')));
+      return;
+    }
+    setState(() => _isSaving = true);
+    try {
+      await FirebaseFirestore.instance
+          .collection('posts')
+          .doc(widget.post.id)
+          .update({
+        'offerItem': _offerController.text.trim(),
+        'wantItem': _wantController.text.trim(),
+        'title': '${_offerController.text.trim()} 교환해요',
+        'description': _descController.text.trim(),
+      });
+      if (!mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('✅ 수정되었습니다.')));
+    } catch (e) {
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('수정 실패: $e')));
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.7,
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        children: [
+          Container(
+            margin: const EdgeInsets.only(top: 12),
+            width: 40, height: 4,
+            decoration: BoxDecoration(
+                color: AppColors.divider,
+                borderRadius: BorderRadius.circular(2)),
+          ),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(20, 16, 20, 4),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text('물물교환 수정',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+            ),
+          ),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 8),
+                  const Text('📦 드릴 물건',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600,
+                          color: AppColors.textSecondary)),
+                  const SizedBox(height: 8),
+                  TextField(controller: _offerController,
+                      decoration: const InputDecoration(hintText: '예) 라면 5봉지')),
+                  const SizedBox(height: 16),
+                  const Text('🙏 원하는 물건',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600,
+                          color: AppColors.textSecondary)),
+                  const SizedBox(height: 8),
+                  TextField(controller: _wantController,
+                      decoration: const InputDecoration(hintText: '예) 세제')),
+                  const SizedBox(height: 16),
+                  const Text('설명 (선택)',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600,
+                          color: AppColors.textSecondary)),
+                  const SizedBox(height: 8),
+                  TextField(controller: _descController, maxLines: 3,
+                      decoration: const InputDecoration(
+                          hintText: '추가 설명을 입력해주세요.')),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: _isSaving ? null : _save,
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.exchangeColor,
+                          padding: const EdgeInsets.symmetric(vertical: 16)),
+                      child: _isSaving
+                          ? const SizedBox(height: 20, width: 20,
+                              child: CircularProgressIndicator(
+                                  color: Colors.white, strokeWidth: 2))
+                          : const Text('수정 완료',
+                              style: TextStyle(fontSize: 16)),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
                 ],
               ),
             ),

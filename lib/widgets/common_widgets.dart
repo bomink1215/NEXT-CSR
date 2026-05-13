@@ -38,36 +38,62 @@ class _ImagePickerModuleState extends State<ImagePickerModule> {
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.center,
-      child: GestureDetector(
-        onTap: _pickImage,
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          width: double.infinity,
-          height: 180,
-          clipBehavior: Clip.antiAlias,
-          decoration: BoxDecoration(
-            color: AppColors.background,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.divider),
-          ),
-          child: _webImagePath != null
-              ? (kIsWeb
-                  ? Image.network(_webImagePath!, fit: BoxFit.cover)
-                  : Image.file(_image!, fit: BoxFit.cover))
-              : Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.camera_alt_outlined,
-                        color: AppColors.textHint, size: 32),
-                    const SizedBox(height: 8),
-                    Text(widget.label,
-                        style: const TextStyle(color: AppColors.textHint)),
-                  ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // 이미지 미리보기
+        if (_image != null)
+          Stack(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.file(
+                  _image!,
+                  width: double.infinity,
+                  height: 180,
+                  fit: BoxFit.cover,
                 ),
-        ),
-      ),
+              ),
+              Positioned(
+                top: 8,
+                right: 8,
+                child: GestureDetector(
+                  onTap: () {
+                    setState(() => _image = null);
+                    widget.onImageSelected(null);
+                  },
+                  child: Container(
+                    width: 28,
+                    height: 28,
+                    decoration: const BoxDecoration(
+                      color: Colors.black54,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.close,
+                        color: Colors.white, size: 16),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        if (_image == null)
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _pickImage,
+              icon: const Icon(Icons.camera_alt_outlined, size: 20),
+              label: Text(widget.label),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.textSecondary,
+                side: const BorderSide(color: AppColors.divider),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                backgroundColor: AppColors.background,
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

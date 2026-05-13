@@ -14,7 +14,20 @@ class GatherScreen extends StatefulWidget {
   State<GatherScreen> createState() => _GatherScreenState();
 }
 
+// 카테고리 상수 (gather_screen 전체에서 공유)
+const _kGatherCategories = [
+  {'emoji': '🍜', 'label': '혼밥 메이트'},
+  {'emoji': '🚶', 'label': '산책'},
+  {'emoji': '☕', 'label': '카페'},
+  {'emoji': '🎮', 'label': '게임'},
+  {'emoji': '📚', 'label': '스터디'},
+  {'emoji': '🏃', 'label': '운동'},
+  {'emoji': '📌', 'label': '기타'},
+];
+
 class _GatherScreenState extends State<GatherScreen> {
+  String? _selectedCategory; // null = 전체
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -40,8 +53,45 @@ class _GatherScreenState extends State<GatherScreen> {
           if (snapshot.connectionState == ConnectionState.waiting)
             return const Center(child: CircularProgressIndicator());
 
-          final docs = snapshot.data!.docs;
-          if (docs.isEmpty) {
+          final allDocs = snapshot.data!.docs;
+          final userStore = UserStoreProvider.of(context);
+          final userGender = userStore.gender;
+          final userAgeCategory = userStore.ageCategory;
+
+          // 사용자 성별/나이대에 맞는 모임만 표시
+          final profileDocs = allDocs.where((doc) {
+            final d = doc.data() as Map<String, dynamic>;
+            final gf = d['genderFilter'] ?? 'any';
+            final af = d['ageFilter'] ?? 'any';
+            if (gf == 'maleOnly' && userGender != '남성') return false;
+            if (gf == 'femaleOnly' && userGender != '여성') return false;
+            if (af == 'twenties' && userAgeCategory != 'twenties') return false;
+            if (af == 'thirties' && userAgeCategory != 'thirties') return false;
+            return true;
+          }).toList();
+
+          final uid = userStore.uid;
+          final docs = (_selectedCategory == null
+              ? profileDocs
+              : profileDocs.where((doc) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  return (data['category'] ?? '기타') == _selectedCategory;
+                }).toList())
+          ..sort((a, b) {
+            final aD = a.data() as Map;
+            final bD = b.data() as Map;
+            final aFull = (aD['currentMembers'] ?? 0) >= (aD['maxMembers'] ?? 1);
+            final bFull = (bD['currentMembers'] ?? 0) >= (bD['maxMembers'] ?? 1);
+            if (!aFull && bFull) return -1;
+            if (aFull && !bFull) return 1;
+            final aIsMe = aD['authorUid'] == uid;
+            final bIsMe = bD['authorUid'] == uid;
+            if (aIsMe && !bIsMe) return -1;
+            if (!aIsMe && bIsMe) return 1;
+            return 0;
+          });
+
+          if (allDocs.isEmpty) {
             return const Center(
                 child: Text('주변에 열린 모임이 없어요.\n첫 모임을 만들어보세요! 👥',
                     textAlign: TextAlign.center));
@@ -56,27 +106,37 @@ class _GatherScreenState extends State<GatherScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text('빠른 모임 찾기',
-                          style: TextStyle(
-                              fontSize: 17, fontWeight: FontWeight.w700)),
-                      const SizedBox(height: 12),
-                      SizedBox(
-                        height: 80,
-                        child: ListView(
-                          scrollDirection: Axis.horizontal,
+                          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 10),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
                           children: [
-                            _QuickCategory('🍜', '혼밥 메이트'),
-                            _QuickCategory('🚶', '산책'),
-                            _QuickCategory('☕', '카페'),
-                            _QuickCategory('🎮', '게임'),
-                            _QuickCategory('📚', '스터디'),
-                            _QuickCategory('🏃', '운동'),
+                            _QuickCategory(
+                              '🔍',
+                              '전체',
+                              isSelected: _selectedCategory == null,
+                              onTap: () =>
+                                  setState(() => _selectedCategory = null),
+                            ),
+                            ..._kGatherCategories.map((c) => _QuickCategory(
+                                  c['emoji']!,
+                                  c['label']!,
+                                  isSelected: _selectedCategory == c['label'],
+                                  onTap: () => setState(() {
+                                    _selectedCategory =
+                                        _selectedCategory == c['label']
+                                            ? null
+                                            : c['label'];
+                                  }),
+                                )),
                           ],
                         ),
                       ),
                       const SizedBox(height: 32),
-                      const Text('지금 모집 중',
-                          style: TextStyle(
-                              fontSize: 17, fontWeight: FontWeight.w700)),
+                      Text(
+                        _selectedCategory == null ? '지금 모집 중' : '"$_selectedCategory" 모임',
+                        style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
                       const SizedBox(height: 12),
                     ],
                   ),
@@ -84,11 +144,15 @@ class _GatherScreenState extends State<GatherScreen> {
               ),
               // 2. 데이터가 없을 때 표시할 화면
               if (docs.isEmpty)
-                const SliverFillRemaining(
+                SliverFillRemaining(
                   hasScrollBody: false,
                   child: Center(
-                      child: Text('주변에 열린 모임이 없어요.\n첫 모임을 만들어보세요! 👥',
-                          textAlign: TextAlign.center)),
+                      child: Text(
+                        _selectedCategory == null
+                            ? '주변에 열린 모임이 없어요.\n첫 모임을 만들어보세요! 👥'
+                            : '"$_selectedCategory" 카테고리의 모임이 없어요.',
+                        textAlign: TextAlign.center,
+                      )),
                 )
               else
                 // 3. 실시간 게시글 목록 (ListView.separated와 유사한 SliverList)
@@ -134,30 +198,44 @@ class _GatherScreenState extends State<GatherScreen> {
 class _QuickCategory extends StatelessWidget {
   final String emoji;
   final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
 
-  const _QuickCategory(this.emoji, this.label);
+  const _QuickCategory(this.emoji, this.label, {required this.isSelected, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(right: 10),
-      width: 72,
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.divider),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(emoji, style: const TextStyle(fontSize: 24)),
-          const SizedBox(height: 4),
-          Text(label,
-              style: const TextStyle(
-                  fontSize: 11,
-                  color: AppColors.textSecondary,
-                  fontWeight: FontWeight.w500)),
-        ],
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(right: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppColors.gatherColor.withOpacity(0.12)
+              : AppColors.surface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? AppColors.gatherColor : AppColors.divider,
+            width: isSelected ? 1.5 : 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(emoji, style: const TextStyle(fontSize: 16)),
+            const SizedBox(width: 5),
+            Text(label,
+                style: TextStyle(
+                    fontSize: 12,
+                    color: isSelected
+                        ? AppColors.gatherColor
+                        : AppColors.textSecondary,
+                    fontWeight: isSelected
+                        ? FontWeight.w700
+                        : FontWeight.w500)),
+          ],
+        ),
       ),
     );
   }
@@ -192,27 +270,35 @@ class _GatherCard extends StatelessWidget {
     }
   }
 
-  String _timeLabel(DateTime t) {
-    final diff = t.difference(DateTime.now());
-    if (diff.inMinutes < 60) return '${diff.inMinutes}분 후';
-    if (diff.inHours < 24) return '${diff.inHours}시간 후';
-    return '${diff.inDays}일 후';
+  String _dateLabel(DateTime t) {
+    return '${t.month}/${t.day} '
+        '${t.hour.toString().padLeft(2, '0')}:'
+        '${t.minute.toString().padLeft(2, '0')}';
   }
 
   @override
   Widget build(BuildContext context) {
+    final store = UserStoreProvider.of(context);
+    final isAuthor = store.uid.isNotEmpty && store.uid == post.authorUid;
+
     return GestureDetector(
       onTap: () => _showDetail(context),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: isAuthor
+              ? AppColors.gatherColor.withOpacity(0.07)
+              : post.isFull
+                  ? AppColors.textHint.withOpacity(0.07)
+                  : AppColors.surface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: post.isFull
-                ? AppColors.divider
-                : AppColors.gatherColor.withOpacity(0.3),
-            width: post.isFull ? 1 : 1.5,
+            color: isAuthor
+                ? AppColors.gatherColor.withOpacity(0.5)
+                : post.isFull
+                    ? AppColors.textHint.withOpacity(0.25)
+                    : AppColors.gatherColor.withOpacity(0.3),
+            width: (isAuthor || !post.isFull) ? 1.5 : 1,
           ),
         ),
         child: Row(
@@ -250,11 +336,7 @@ class _GatherCard extends StatelessWidget {
                         ),
                       ),
                       if (post.isFull)
-                        const TagBadge(label: '마감', color: AppColors.error)
-                      else
-                        TagBadge(
-                            label: _timeLabel(post.meetTime),
-                            color: AppColors.gatherColor),
+                        const TagBadge(label: '마감', color: AppColors.error),
                     ],
                   ),
                   const SizedBox(height: 6),
@@ -286,7 +368,11 @@ class _GatherCard extends StatelessWidget {
                   const SizedBox(height: 6),
                   Wrap(
                     spacing: 6,
+                    runSpacing: 4,
                     children: [
+                      TagBadge(
+                          label: _dateLabel(post.meetTime),
+                          color: AppColors.gatherColor),
                       TagBadge(
                           label: _genderLabel(post.genderFilter),
                           color: AppColors.textSecondary),
@@ -301,6 +387,40 @@ class _GatherCard extends StatelessWidget {
                       ),
                     ],
                   ),
+                  if (isAuthor) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () => _showEditSheet(context),
+                          style: TextButton.styleFrom(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 8),
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                          child: const Text('수정',
+                              style: TextStyle(
+                                  fontSize: 13,
+                                  color: AppColors.gatherColor,
+                                  fontWeight: FontWeight.w600)),
+                        ),
+                        TextButton(
+                          onPressed: () => _deletePost(context),
+                          style: TextButton.styleFrom(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 8),
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                          child: const Text('삭제',
+                              style: TextStyle(
+                                  fontSize: 13,
+                                  color: AppColors.error,
+                                  fontWeight: FontWeight.w600)),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -317,6 +437,51 @@ class _GatherCard extends StatelessWidget {
       backgroundColor: Colors.transparent,
       builder: (_) => _GatherDetail(post: post),
     );
+  }
+
+  void _showEditSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _EditGatherSheet(post: post),
+    );
+  }
+
+  Future<void> _deletePost(BuildContext context) async {
+    final confirm = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16)),
+            title: const Text('모임 삭제'),
+            content: const Text('정말 이 모임을 삭제하시겠습니까?'),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('취소')),
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('삭제',
+                      style: TextStyle(color: AppColors.error))),
+            ],
+          ),
+        ) ??
+        false;
+    if (!confirm) return;
+    try {
+      await FirebaseFirestore.instance
+          .collection('posts')
+          .doc(post.id)
+          .delete();
+      if (context.mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('모임이 삭제되었습니다.')));
+    } catch (e) {
+      if (context.mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('삭제 실패: $e')));
+    }
   }
 }
 
@@ -365,6 +530,34 @@ class _GatherDetail extends StatelessWidget {
     final userStore = UserStoreProvider.of(context);
     final firestore = FirebaseFirestore.instance;
 
+    // ── 중복 참여 사전 체크 ──
+    final postSnap =
+        await firestore.collection('posts').doc(post.id).get();
+    if (postSnap.exists) {
+      final existingMembers =
+          List<dynamic>.from(postSnap.data()?['members'] ?? []);
+      if (existingMembers.contains(userStore.uid)) {
+        if (!context.mounted) return;
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16)),
+            content: const Text('이미 참여 중인 모임입니다.',
+                style: TextStyle(fontSize: 15)),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('확인',
+                    style: TextStyle(color: AppColors.gatherColor)),
+              ),
+            ],
+          ),
+        );
+        return;
+      }
+    }
+
     try {
       await firestore.runTransaction((transaction) async {
         final postRef = firestore.collection('posts').doc(post.id);
@@ -372,41 +565,46 @@ class _GatherDetail extends StatelessWidget {
 
         if (!snapshot.exists) return;
 
-        List<dynamic> members = List.from(snapshot.data()?['members'] ?? []);
         int current = snapshot.data()?['currentMembers'] ?? 0;
         int max = snapshot.data()?['maxMembers'] ?? 0;
 
-        // 중복 참여 및 정원 체크
-        if (members.contains(userStore.name)) throw '이미 참여 중인 모임입니다.';
-        if (current >= max) throw '이미 정원이 마감되었습니다.';
+        if (current >= max) throw Exception('이미 정원이 마감되었습니다.');
 
         // 1. 게시글 인원 업데이트
         transaction.update(postRef, {
           'currentMembers': current + 1,
-          'members': FieldValue.arrayUnion([userStore.name]),
+          'members': FieldValue.arrayUnion([userStore.uid]),
         });
 
         // 2. 그룹 채팅방 생성/업데이트
-        // 채팅방 ID를 postId와 동일하게 설정하여 참여자들을 한 곳에 모음
         final chatRef = firestore.collection('chatRooms').doc(post.id);
         transaction.set(
             chatRef,
             {
               'postId': post.id,
-              'roomTitle': post.title,
-              'members': FieldValue.arrayUnion([userStore.name]),
-              'lastMessage': '${userStore.name}님이 합류했습니다!',
+              'title': post.title,
+              'members': FieldValue.arrayUnion([userStore.uid]),
+              'lastMessage': '${userStore.name}님이 참여하셨습니다.',
               'lastMessageTime': FieldValue.serverTimestamp(),
-              'type': 'gathering',
+              'type': 'gather',
+              'avatarEmoji': post.emoji,
+              'authorUid': post.authorUid,
+              'unreadCount': 0,
             },
             SetOptions(merge: true));
+
+        // 3. 시스템 메시지
+        transaction.set(chatRef.collection('messages').doc(), {
+          'senderName': 'system',
+          'text': '${userStore.name}님이 참여하셨습니다.',
+          'time': FieldValue.serverTimestamp(),
+        });
       });
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('🎉 참여 완료! 채팅방으로 이동합니다.')));
 
-        // 참여 성공 시 해당 채팅방으로 즉시 이동
         Navigator.push(
             context,
             MaterialPageRoute(
@@ -414,19 +612,35 @@ class _GatherDetail extends StatelessWidget {
                 room: ChatRoom(
                   id: post.id,
                   title: post.title,
-                  lastMessage: '',
+                  lastMessage: '${userStore.name}님이 참여하셨습니다.',
                   lastMessageTime: DateTime.now(),
                   unreadCount: 0,
                   avatarEmoji: post.emoji,
                   type: ChatRoomType.gather,
                   members: [],
+                  authorUid: post.authorUid,
                 ),
               ),
             ));
       }
     } catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(e.toString())));
+      if (!context.mounted) return;
+      final msg = e.toString().replaceFirst('Exception: ', '');
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          content: Text(msg, style: const TextStyle(fontSize: 15)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('확인',
+                  style: TextStyle(color: AppColors.gatherColor)),
+            ),
+          ],
+        ),
+      );
     }
   }
 
@@ -499,35 +713,59 @@ class _GatherDetail extends StatelessWidget {
                     ),
                   ),
                   const Spacer(),
-                  if (!post.isFull)
-                    SizedBox(
+                  Builder(builder: (ctx) {
+                    final store = UserStoreProvider.of(ctx);
+                    final isAuthor = store.uid.isNotEmpty &&
+                        store.uid == post.authorUid;
+                    // 내가 만든 모임
+                    if (isAuthor) {
+                      return Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        decoration: BoxDecoration(
+                          color: AppColors.gatherColor.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Center(
+                          child: Text('내가 만든 모임',
+                              style: TextStyle(
+                                  color: AppColors.gatherColor,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 15)),
+                        ),
+                      );
+                    }
+                    // 마감된 모임
+                    if (post.isFull) {
+                      return Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        decoration: BoxDecoration(
+                          color: AppColors.cardBg,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Center(
+                          child: Text('마감된 모임입니다',
+                              style: TextStyle(
+                                  color: AppColors.textHint, fontSize: 15)),
+                        ),
+                      );
+                    }
+                    // 참여 가능
+                    return SizedBox(
                       width: double.infinity,
                       child: ElevatedButton.icon(
-                        onPressed: () => _onJoinPressed(context, post),
+                        onPressed: () => _onJoinPressed(ctx, post),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.gatherColor,
                           padding: const EdgeInsets.symmetric(vertical: 16),
                         ),
                         icon: const Icon(Icons.group_add, color: Colors.white),
                         label: const Text('모임 참여하기',
-                            style:
-                                TextStyle(fontSize: 15, color: Colors.white)),
+                            style: TextStyle(fontSize: 15, color: Colors.white)),
                       ),
-                    )
-                  else
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      decoration: BoxDecoration(
-                        color: AppColors.cardBg,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Center(
-                        child: Text('마감된 모임입니다',
-                            style: TextStyle(
-                                color: AppColors.textHint, fontSize: 15)),
-                      ),
-                    ),
+                    );
+                  }),
                 ],
               ),
             ),
@@ -568,10 +806,31 @@ class _CreateGatherSheetState extends State<_CreateGatherSheet> {
   final _descController = TextEditingController();
   final _placeController = TextEditingController();
 
-  String _selectedEmoji = '👥'; // 기본 아이콘
-  DateTime _selectedDateTime = DateTime.now();
+  String _selectedEmoji = '👥';
+  String _selectedCategory = '기타';
+  DateTime _selectedDateTime =
+      DateTime.now().add(const Duration(hours: 1));
 
   bool _isUploading = false;
+
+  Future<void> _pickDateTime() async {
+    final now = DateTime.now();
+    final date = await showDatePicker(
+      context: context,
+      initialDate: _selectedDateTime.isAfter(now) ? _selectedDateTime : now,
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 365)),
+    );
+    if (date == null || !mounted) return;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(
+          hour: _selectedDateTime.hour, minute: _selectedDateTime.minute),
+    );
+    if (time == null || !mounted) return;
+    setState(() => _selectedDateTime = DateTime(
+        date.year, date.month, date.day, time.hour, time.minute));
+  }
 
   Future<void> _submitGathering() async {
     if (_titleController.text.trim().isEmpty) return;
@@ -594,10 +853,12 @@ class _CreateGatherSheetState extends State<_CreateGatherSheet> {
         'maxMembers': _maxMembers,
         'currentMembers': 1,
         'authorName': userStore.name,
+        'authorUid': userStore.uid,
         'location': userStore.location,
         'genderFilter': _genderFilter.name,
         'ageFilter': _ageFilter.name,
-        'members': [userStore.name],
+        'category': _selectedCategory,
+        'members': [userStore.uid],
         'createdAt': FieldValue.serverTimestamp(),
       });
 
@@ -605,11 +866,12 @@ class _CreateGatherSheetState extends State<_CreateGatherSheet> {
         'id': postRef.id,
         'title': _titleController.text.trim(),
         'lastMessage': '모임이 생성되었습니다! 👋',
-        'lastMessageTime': FieldValue.serverTimestamp(), // DB 저장용
+        'lastMessageTime': FieldValue.serverTimestamp(),
         'type': 'gather',
-        'members': [userStore.name],
+        'members': [userStore.uid],
         'avatarEmoji': _selectedEmoji,
         'unreadCount': 0,
+        'authorUid': userStore.uid,
       });
 
       await firestore
@@ -637,7 +899,8 @@ class _CreateGatherSheetState extends State<_CreateGatherSheet> {
                 lastMessageTime: now,
                 unreadCount: 0,
                 avatarEmoji: _selectedEmoji,
-                members: [userStore.name], // Enum 타입 확인 필요
+                members: [userStore.name],
+                authorUid: userStore.uid,
               ),
             ),
           ),
@@ -683,6 +946,44 @@ class _CreateGatherSheetState extends State<_CreateGatherSheet> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  const Text('카테고리',
+                      style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textSecondary)),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _kGatherCategories.map((c) {
+                      final isSelected = _selectedCategory == c['label'];
+                      return GestureDetector(
+                        onTap: () => setState(() {
+                          _selectedCategory = c['label']!;
+                          _selectedEmoji = c['emoji']!;
+                        }),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                          decoration: BoxDecoration(
+                            color: isSelected ? AppColors.gatherColor : AppColors.surface,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: isSelected ? AppColors.gatherColor : AppColors.divider,
+                            ),
+                          ),
+                          child: Text(
+                            '${c['emoji']} ${c['label']}',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: isSelected ? Colors.white : AppColors.textSecondary,
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 16),
                   const Text('모임 제목',
                       style: TextStyle(
                           fontSize: 14,
@@ -705,6 +1006,45 @@ class _CreateGatherSheetState extends State<_CreateGatherSheet> {
                     decoration: const InputDecoration(
                       hintText: '약속 장소를 입력해주세요',
                       prefixIcon: Icon(Icons.location_on_outlined),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('날짜 및 시간',
+                      style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textSecondary)),
+                  const SizedBox(height: 8),
+                  GestureDetector(
+                    onTap: _pickDateTime,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: AppColors.cardBg,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                            color: AppColors.gatherColor.withOpacity(0.5)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.calendar_today_outlined,
+                              size: 18, color: AppColors.gatherColor),
+                          const SizedBox(width: 10),
+                          Text(
+                            '${_selectedDateTime.year}년 ${_selectedDateTime.month}월 ${_selectedDateTime.day}일  '
+                            '${_selectedDateTime.hour.toString().padLeft(2, '0')}:'
+                            '${_selectedDateTime.minute.toString().padLeft(2, '0')}',
+                            style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textPrimary),
+                          ),
+                          const Spacer(),
+                          const Icon(Icons.arrow_forward_ios,
+                              size: 13, color: AppColors.textHint),
+                        ],
+                      ),
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -837,6 +1177,177 @@ class _CreateGatherSheetState extends State<_CreateGatherSheet> {
                     ),
                   ),
                   const SizedBox(height: 20),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── 모임 수정 시트 ─────────────────────────────────────────────
+class _EditGatherSheet extends StatefulWidget {
+  final GatherPost post;
+  const _EditGatherSheet({required this.post});
+
+  @override
+  State<_EditGatherSheet> createState() => _EditGatherSheetState();
+}
+
+class _EditGatherSheetState extends State<_EditGatherSheet> {
+  late final TextEditingController _titleController;
+  late final TextEditingController _descController;
+  late final TextEditingController _placeController;
+  late int _maxMembers;
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _titleController = TextEditingController(text: widget.post.title);
+    _descController = TextEditingController(text: widget.post.description);
+    _placeController = TextEditingController(text: widget.post.place);
+    _maxMembers = widget.post.maxMembers;
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _descController.dispose();
+    _placeController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (_titleController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('모임 제목을 입력해주세요.')));
+      return;
+    }
+    setState(() => _isSaving = true);
+    try {
+      await FirebaseFirestore.instance
+          .collection('posts')
+          .doc(widget.post.id)
+          .update({
+        'title': _titleController.text.trim(),
+        'description': _descController.text.trim(),
+        'place': _placeController.text.trim(),
+        'maxMembers': _maxMembers,
+      });
+      if (!mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('✅ 수정되었습니다.')));
+    } catch (e) {
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('수정 실패: $e')));
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.75,
+      padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom),
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        children: [
+          Container(
+            margin: const EdgeInsets.only(top: 12),
+            width: 40, height: 4,
+            decoration: BoxDecoration(
+                color: AppColors.divider,
+                borderRadius: BorderRadius.circular(2)),
+          ),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(20, 16, 20, 4),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text('모임 수정',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+            ),
+          ),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 8),
+                  const Text('모임 제목',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600,
+                          color: AppColors.textSecondary)),
+                  const SizedBox(height: 8),
+                  TextField(controller: _titleController,
+                      decoration: const InputDecoration(hintText: '모임 제목')),
+                  const SizedBox(height: 16),
+                  const Text('설명',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600,
+                          color: AppColors.textSecondary)),
+                  const SizedBox(height: 8),
+                  TextField(controller: _descController, maxLines: 3,
+                      decoration: const InputDecoration(hintText: '모임 설명')),
+                  const SizedBox(height: 16),
+                  const Text('장소',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600,
+                          color: AppColors.textSecondary)),
+                  const SizedBox(height: 8),
+                  TextField(controller: _placeController,
+                      decoration: const InputDecoration(hintText: '만날 장소')),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      const Text('최대 인원',
+                          style: TextStyle(fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textSecondary)),
+                      const Spacer(),
+                      IconButton(
+                        onPressed: _maxMembers > widget.post.currentMembers + 1
+                            ? () => setState(() => _maxMembers--)
+                            : null,
+                        icon: const Icon(Icons.remove_circle_outline),
+                        color: AppColors.gatherColor,
+                      ),
+                      Text('$_maxMembers명',
+                          style: const TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.w700)),
+                      IconButton(
+                        onPressed: _maxMembers < 20
+                            ? () => setState(() => _maxMembers++)
+                            : null,
+                        icon: const Icon(Icons.add_circle_outline),
+                        color: AppColors.gatherColor,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: _isSaving ? null : _save,
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.gatherColor,
+                          padding: const EdgeInsets.symmetric(vertical: 16)),
+                      child: _isSaving
+                          ? const SizedBox(height: 20, width: 20,
+                              child: CircularProgressIndicator(
+                                  color: Colors.white, strokeWidth: 2))
+                          : const Text('수정 완료',
+                              style: TextStyle(fontSize: 16)),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
                 ],
               ),
             ),

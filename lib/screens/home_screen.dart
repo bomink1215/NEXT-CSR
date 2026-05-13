@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../theme/app_theme.dart';
 import '../models/mock_data.dart';
 import '../models/user_store.dart';
@@ -9,6 +10,7 @@ import 'review_screen.dart';
 import 'gather_screen.dart';
 import 'chat_list_screen.dart';
 import 'notification_screen.dart';
+import 'signup_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -24,6 +26,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _HomeTab(),
     GroupBuyScreen(),
     ExchangeScreen(),
+    ReviewScreen(),
     GatherScreen(),
     ChatListScreen(),
   ];
@@ -66,6 +69,11 @@ class _HomeScreenState extends State<HomeScreen> {
               label: '물물교환',
             ),
             BottomNavigationBarItem(
+              icon: Icon(Icons.apartment_outlined),
+              activeIcon: Icon(Icons.apartment),
+              label: '원룸리뷰',
+            ),
+            BottomNavigationBarItem(
               icon: Icon(Icons.people_outline),
               activeIcon: Icon(Icons.people),
               label: '모임',
@@ -85,6 +93,79 @@ class _HomeScreenState extends State<HomeScreen> {
 // ─── 홈 탭 ───────────────────────────────────────────────────────
 class _HomeTab extends StatelessWidget {
   const _HomeTab();
+
+  Future<void> _showResetDialog(BuildContext context) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('🗑️ 데이터 초기화'),
+        content: const Text(
+          '모든 게시글과 채팅방을 삭제합니다.\n이 작업은 되돌릴 수 없습니다.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('취소'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('전부 삭제', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true || !context.mounted) return;
+
+    // 로딩 표시
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+
+    try {
+      final firestore = FirebaseFirestore.instance;
+
+      // posts 전체 삭제
+      final posts = await firestore.collection('posts').get();
+      for (final doc in posts.docs) {
+        await doc.reference.delete();
+      }
+
+      // chatRooms 전체 삭제 (messages 서브컬렉션 포함)
+      final chatRooms = await firestore.collection('chatRooms').get();
+      for (final room in chatRooms.docs) {
+        final messages = await room.reference.collection('messages').get();
+        for (final msg in messages.docs) {
+          await msg.reference.delete();
+        }
+        await room.reference.delete();
+      }
+
+      if (context.mounted) {
+        Navigator.pop(context); // 로딩 닫기
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ 모든 테스트 데이터가 삭제되었습니다.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.pop(context); // 로딩 닫기
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('삭제 중 오류: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
 
   void _showLocationSheet(BuildContext context) {
     final store = UserStoreProvider.of(context);
@@ -314,6 +395,24 @@ class _HomeTab extends StatelessWidget {
                           ),
                         ),
                       ],
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete_sweep_outlined),
+                      onPressed: () => _showResetDialog(context),
+                      color: Colors.red.shade300,
+                      tooltip: '테스트 데이터 초기화 (개발용)',
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.logout),
+                      onPressed: () {
+                        Navigator.of(context, rootNavigator: true)
+                            .pushReplacement(
+                          MaterialPageRoute(
+                              builder: (_) => const SignupScreen()),
+                        );
+                      },
+                      color: AppColors.textSecondary,
+                      tooltip: '로그아웃',
                     ),
                   ],
                 ),
