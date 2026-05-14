@@ -16,7 +16,8 @@ import '../utils/notification_service.dart';
 import '../utils/location_service.dart';
 
 class GroupBuyScreen extends StatefulWidget {
-  const GroupBuyScreen({super.key});
+  final String? initialPostId;
+  const GroupBuyScreen({super.key, this.initialPostId});
 
   @override
   State<GroupBuyScreen> createState() => _GroupBuyScreenState();
@@ -27,6 +28,47 @@ class _GroupBuyScreenState extends State<GroupBuyScreen> {
   final List<String> _filters = ['전체', '식료품', '생활용품', '배달음식'];
   String _searchQuery = '';
   final _searchController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialPostId != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        final snap = await FirebaseFirestore.instance
+            .collection('posts')
+            .doc(widget.initialPostId)
+            .get();
+        if (!snap.exists || !mounted) return;
+        final data = snap.data() as Map<String, dynamic>;
+        final post = GroupBuyPost(
+          id: snap.id,
+          title: data['title'] ?? '',
+          category: data['category'] ?? '',
+          imageUrl: data['imageUrl'] ?? '',
+          totalPrice: data['totalPrice'] ?? 0,
+          unitPrice: data['unitPrice'] ?? 0,
+          maxParticipants: data['maxParticipants'] ?? 0,
+          currentParticipants: data['currentParticipants'] ?? 0,
+          walkMinutes: data['walkMinutes'] ?? 0,
+          location: data['location'] ?? '',
+          authorName: data['authorName'] ?? '',
+          authorUid: data['authorUid'] ?? '',
+          createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+          isDelivery: data['isDelivery'] ?? false,
+          meetingPlace: data['meetingPlace'] ?? '',
+          deadline: (data['deadline'] as Timestamp?)?.toDate(),
+        );
+        if (mounted) {
+          showModalBottomSheet(
+            context: context,
+            isScrollControlled: true,
+            backgroundColor: Colors.transparent,
+            builder: (_) => _GroupBuyDetail(post: post),
+          );
+        }
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -349,20 +391,20 @@ class _GroupBuyCardState extends State<_GroupBuyCard> {
             const SizedBox(height: 4),
             Row(
               children: [
-                const Icon(Icons.location_on_outlined,
-                    size: 13, color: AppColors.textHint),
-                const SizedBox(width: 2),
-                Text(
-                  widget.post.location,
-                  style: const TextStyle(
-                      fontSize: 12, color: AppColors.textHint),
-                ),
-                const SizedBox(width: 8),
                 const Icon(Icons.person_outline,
                     size: 13, color: AppColors.textHint),
                 const SizedBox(width: 2),
                 Text(
                   widget.post.authorName,
+                  style: const TextStyle(
+                      fontSize: 12, color: AppColors.textHint),
+                ),
+                const SizedBox(width: 8),
+                const Icon(Icons.location_on_outlined,
+                    size: 13, color: AppColors.textHint),
+                const SizedBox(width: 2),
+                Text(
+                  widget.post.location,
                   style: const TextStyle(
                       fontSize: 12, color: AppColors.textHint),
                 ),
@@ -840,6 +882,7 @@ class _GroupBuyDetail extends StatelessWidget {
       type: 'groupBuy',
       title: '🛒 공동구매에 새 참여자가 왔어요',
       body: '${userStore.name}님이 "${post.title}"에 참여했어요.',
+      postId: post.id,
     );
   }
 
@@ -1420,7 +1463,7 @@ class _CreateGroupBuySheetState extends State<_CreateGroupBuySheet> {
       final totalPrice =
           int.parse(_totalPriceController.text.replaceAll(',', ''));
 
-      await FirebaseFirestore.instance.collection('posts').add({
+      final newPostRef = await FirebaseFirestore.instance.collection('posts').add({
         'type': 'groupBuy',
         'title': _titleController.text.trim(),
         'category': _type,
@@ -1442,31 +1485,29 @@ class _CreateGroupBuySheetState extends State<_CreateGroupBuySheet> {
       Navigator.pop(context);
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('✅ 공동구매 글이 등록되었습니다!')));
+
+      // 같은 동네 사용자들한테 새 글 알림
+      final usersSnap = await FirebaseFirestore.instance
+          .collection('users')
+          .where('location', isEqualTo: userStore.location)
+          .get();
+      final otherUids = usersSnap.docs
+          .map((d) => d.id)
+          .where((id) => id != userStore.uid)
+          .toList();
+      await NotificationService.sendToMany(
+        toUids: otherUids,
+        type: 'groupBuy',
+        title: '🛒 새 공동구매 글이 올라왔어요',
+        body: '${userStore.location} • ${_titleController.text.trim()}',
+        postId: newPostRef.id,
+      );
     } catch (e) {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text('오류 발생: $e')));
     } finally {
       if (mounted) setState(() => _isUploading = false);
     }
-
-    // 같은 동네 사용자들한테 새 글 알림
-    // (현재는 글쓴이 제외한 모든 users 컬렉션에서 같은 location인 uid 조회)
-    final usersSnap = await FirebaseFirestore.instance
-        .collection('users')
-        .where('location', isEqualTo: userStore.location)
-        .get();
-
-    final otherUids = usersSnap.docs
-        .map((d) => d.id)
-        .where((id) => id != userStore.uid)
-        .toList();
-
-    await NotificationService.sendToMany(
-      toUids: otherUids,
-      type: 'groupBuy',
-      title: '🛒 새 공동구매 글이 올라왔어요',
-      body: '${userStore.location} • ${_titleController.text.trim()}',
-    );
   }
 
   String _formatPrice(int price) => price

@@ -3,6 +3,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../theme/app_theme.dart';
 import '../models/models.dart';
 import '../models/user_store.dart';
+import 'chat_list_screen.dart';
+import 'group_buy_screen.dart';
+import 'exchange_screen.dart';
+import 'gather_screen.dart';
 
 class NotificationScreen extends StatelessWidget {
   const NotificationScreen({super.key});
@@ -111,8 +115,8 @@ class NotificationScreen extends StatelessWidget {
                 postId: data['postId'] as String? ?? '',
                 onTap: () async {
                   await _markRead(uid, docs[i].id);
+                  if (!context.mounted) return;
                   if (n.title.contains('총대를 평가') &&
-                      context.mounted &&
                       (data['postId'] as String? ?? '').isNotEmpty) {
                     _showRatingDialog(
                       context,
@@ -120,6 +124,8 @@ class NotificationScreen extends StatelessWidget {
                       data['postId'] as String,
                       n.body,
                     );
+                  } else {
+                    await _navigateFromNotification(context, n.type, data, n.title);
                   }
                 },
                 onDismiss: () => _delete(uid, docs[i].id),
@@ -173,6 +179,54 @@ class NotificationScreen extends StatelessWidget {
         .collection('items')
         .doc(docId)
         .delete();
+  }
+
+  Future<void> _navigateFromNotification(
+    BuildContext context,
+    NotificationType type,
+    Map<String, dynamic> data,
+    String title,
+  ) async {
+    final postId = data['postId'] as String? ?? '';
+    final chatRoomId = data['chatRoomId'] as String? ?? '';
+
+    // 채팅으로 이동: 새 참여자 알림 또는 교환 제안 알림
+    if (title.contains('새 참여자') || title.contains('제안이 왔어요')) {
+      final roomId = chatRoomId.isNotEmpty ? chatRoomId : postId;
+      if (roomId.isEmpty) return;
+      final snap = await FirebaseFirestore.instance
+          .collection('chatRooms')
+          .doc(roomId)
+          .get();
+      if (!snap.exists || !context.mounted) return;
+      final room = ChatRoom.fromMap(snap.data() as Map<String, dynamic>, snap.id);
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => ChatScreen(room: room)),
+      );
+      return;
+    }
+
+    // 새 글 알림: 해당 게시글 상세로 이동
+    if (title.contains('새') && (title.contains('올라왔어요') || title.contains('생겼어요')) && postId.isNotEmpty) {
+      if (!context.mounted) return;
+      switch (type) {
+        case NotificationType.groupBuy:
+          Navigator.push(context, MaterialPageRoute(
+              builder: (_) => GroupBuyScreen(initialPostId: postId)));
+          break;
+        case NotificationType.gather:
+          Navigator.push(context, MaterialPageRoute(
+              builder: (_) => GatherScreen(initialPostId: postId)));
+          break;
+        case NotificationType.exchange:
+          Navigator.push(context, MaterialPageRoute(
+              builder: (_) => ExchangeScreen(initialPostId: postId)));
+          break;
+        default:
+          break;
+      }
+    }
   }
 
   Widget _buildEmpty() {

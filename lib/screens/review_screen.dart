@@ -389,19 +389,6 @@ class _ReviewCard extends StatelessWidget {
                 ),
               ],
             ),
-            if (review.tags.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: review.tags.map((tag) {
-                  return TagBadge(
-                    label: tag.isPositive ? '✓ ${tag.label}' : '✗ ${tag.label}',
-                    color: tag.isPositive ? AppColors.success : AppColors.error,
-                  );
-                }).toList(),
-              ),
-            ],
             const SizedBox(height: 12),
             if (review.isUnlocked)
               Text(
@@ -440,8 +427,7 @@ class _ReviewCard extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('작성자: ${review.authorName}',
-                    style: const TextStyle(fontSize: 12, color: AppColors.textHint)),
+                const SizedBox.shrink(),
                 if (isAuthor)
                   Row(
                     mainAxisSize: MainAxisSize.min,

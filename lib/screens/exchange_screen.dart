@@ -14,7 +14,8 @@ import '../utils/notification_service.dart';
 import '../utils/location_service.dart';
 
 class ExchangeScreen extends StatefulWidget {
-  const ExchangeScreen({super.key});
+  final String? initialPostId;
+  const ExchangeScreen({super.key, this.initialPostId});
 
   @override
   State<ExchangeScreen> createState() => _ExchangeScreenState();
@@ -23,6 +24,29 @@ class ExchangeScreen extends StatefulWidget {
 class _ExchangeScreenState extends State<ExchangeScreen> {
   String _searchQuery = '';
   final _searchController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialPostId != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        final snap = await FirebaseFirestore.instance
+            .collection('posts')
+            .doc(widget.initialPostId)
+            .get();
+        if (!snap.exists || !mounted) return;
+        final post = ExchangePost.fromMap(snap.data() as Map<String, dynamic>, snap.id);
+        if (mounted) {
+          showModalBottomSheet(
+            context: context,
+            isScrollControlled: true,
+            backgroundColor: Colors.transparent,
+            builder: (_) => _ExchangeDetail(post: post),
+          );
+        }
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -755,6 +779,7 @@ class _ExchangeDetail extends StatelessWidget {
                               title: '🔄 물물교환 제안이 왔어요',
                               body:
                                   '${userStore.name}님이 "${post.offerItem} ↔ ${post.wantItem}"에 채팅을 걸었어요.',
+                              chatRoomId: chatId,
                             );
 
                             if (!context.mounted) return;

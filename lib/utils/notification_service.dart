@@ -5,11 +5,12 @@ class NotificationService {
 
   // 알림 1개 생성
   static Future<void> send({
-    required String toUid,       // 받을 사람 uid
-    required String type,        // groupBuy / exchange / gather / review / system
+    required String toUid,
+    required String type,
     required String title,
     required String body,
     String postId = '',
+    String chatRoomId = '',
   }) async {
     if (toUid.isEmpty) return;
     await _db
@@ -23,16 +24,17 @@ class NotificationService {
       'isRead': false,
       'createdAt': FieldValue.serverTimestamp(),
       if (postId.isNotEmpty) 'postId': postId,
+      if (chatRoomId.isNotEmpty) 'chatRoomId': chatRoomId,
     });
   }
 
-  // 여러 명한테 동시에 알림 보내기
   static Future<void> sendToMany({
     required List<String> toUids,
     required String type,
     required String title,
     required String body,
     String postId = '',
+    String chatRoomId = '',
   }) async {
     final batch = _db.batch();
     for (final uid in toUids) {
@@ -49,6 +51,7 @@ class NotificationService {
         'isRead': false,
         'createdAt': FieldValue.serverTimestamp(),
         if (postId.isNotEmpty) 'postId': postId,
+        if (chatRoomId.isNotEmpty) 'chatRoomId': chatRoomId,
       });
     }
     await batch.commit();

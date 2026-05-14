@@ -10,7 +10,8 @@ import '../utils/notification_service.dart';
 import '../utils/location_service.dart';
 
 class GatherScreen extends StatefulWidget {
-  const GatherScreen({super.key});
+  final String? initialPostId;
+  const GatherScreen({super.key, this.initialPostId});
 
   @override
   State<GatherScreen> createState() => _GatherScreenState();
@@ -29,6 +30,29 @@ const _kGatherCategories = [
 
 class _GatherScreenState extends State<GatherScreen> {
   String? _selectedCategory; // null = 전체
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialPostId != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        final snap = await FirebaseFirestore.instance
+            .collection('posts')
+            .doc(widget.initialPostId)
+            .get();
+        if (!snap.exists || !mounted) return;
+        final post = GatherPost.fromMap(snap.id, snap.data() as Map<String, dynamic>);
+        if (mounted) {
+          showModalBottomSheet(
+            context: context,
+            isScrollControlled: true,
+            backgroundColor: Colors.transparent,
+            builder: (_) => _GatherDetail(post: post),
+          );
+        }
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -390,6 +414,15 @@ class _GatherCardState extends State<_GatherCard> {
                   const SizedBox(height: 8),
                   Row(
                     children: [
+                      const Icon(Icons.person_outline,
+                          size: 12, color: AppColors.textHint),
+                      const SizedBox(width: 2),
+                      Text(
+                        widget.post.authorName,
+                        style: const TextStyle(
+                            fontSize: 11, color: AppColors.textHint),
+                      ),
+                      const SizedBox(width: 8),
                       const Icon(Icons.location_on_outlined,
                           size: 12, color: AppColors.textHint),
                       const SizedBox(width: 2),
@@ -650,6 +683,7 @@ class _GatherDetail extends StatelessWidget {
           type: 'gather',
           title: '👥 모임에 새 참여자가 왔어요',
           body: '${userStore.name}님이 "${post.title}"에 참여했어요.',
+          postId: post.id,
         );
 
         Navigator.push(
@@ -949,6 +983,7 @@ class _CreateGatherSheetState extends State<_CreateGatherSheet> {
           type: 'gather',
           title: '👥 새 모임이 생겼어요',
           body: '${userStore.location} • ${_titleController.text.trim()}',
+          postId: postRef.id,
         );
 
         Navigator.push(

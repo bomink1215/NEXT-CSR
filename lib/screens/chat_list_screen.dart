@@ -173,6 +173,9 @@ class _ChatRoomTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final uid = UserStoreProvider.of(context).uid;
+    final unread = room.unreadCounts[uid] ?? 0;
+
     return ListTile(
       onTap: () => _openChat(context),
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
@@ -226,6 +229,22 @@ class _ChatRoomTile extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ),
+          if (unread > 0)
+            Container(
+              margin: const EdgeInsets.only(left: 8, top: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+              decoration: BoxDecoration(
+                color: AppColors.primary,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                '$unread',
+                style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white),
+              ),
+            ),
         ],
       ),
     );
@@ -251,6 +270,7 @@ class ChatScreen extends StatefulWidget {
 
 class ChatScreenState extends State<ChatScreen> {
   final TextEditingController _ctrl = TextEditingController();
+  final FocusNode _focusNode = FocusNode();
   ChatRoom? _liveRoom; // 실시간 room (lastRead 반영)
   bool _markedAsRead = false;
 
@@ -287,6 +307,13 @@ class ChatScreenState extends State<ChatScreen> {
   }
 
   @override
+  void dispose() {
+    _ctrl.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (!_markedAsRead) {
@@ -303,6 +330,7 @@ class ChatScreenState extends State<ChatScreen> {
         .doc(widget.room.id)
         .set({
       'lastRead': {uid: FieldValue.serverTimestamp()},
+      'unreadCounts': {uid: 0},
     }, SetOptions(merge: true));
   }
 
@@ -446,6 +474,7 @@ class ChatScreenState extends State<ChatScreen> {
           type: 'exchange',
           title: '🔄 물물교환이 취소됐어요',
           body: '${store.name}님이 "${widget.room.title}" 거래를 파기했어요.',
+          chatRoomId: widget.room.id,
         );
       }
 
@@ -543,6 +572,7 @@ class ChatScreenState extends State<ChatScreen> {
           type: 'groupBuy',
           title: '🛒 공동구매 참여자가 나갔어요',
           body: '${store.name}님이 "${widget.room.title}"에서 나갔어요.',
+          postId: widget.room.id,
         );
       }
       // 모임 참여자가 채팅방 퇴장
@@ -552,6 +582,7 @@ class ChatScreenState extends State<ChatScreen> {
           type: 'gather',
           title: '👥 모임 참여자가 나갔어요',
           body: '${store.name}님이 "${widget.room.title}"에서 나갔어요.',
+          postId: widget.room.id,
         );
       }
       // 물물교환 취소
@@ -561,6 +592,7 @@ class ChatScreenState extends State<ChatScreen> {
           type: 'exchange',
           title: '🔄 물물교환이 취소됐어요',
           body: '${store.name}님이 "${widget.room.title}" 거래에서 나갔어요.',
+          chatRoomId: widget.room.id,
         );
       }
 
@@ -591,16 +623,27 @@ class ChatScreenState extends State<ChatScreen> {
       'isSystem': false,
     });
 
+    // 다른 멤버들 unreadCounts +1
+    final members = (_liveRoom ?? widget.room).members;
+    final Map<String, dynamic> unreadUpdates = {};
+    for (final memberId in members) {
+      if (memberId != uid) {
+        unreadUpdates['unreadCounts.$memberId'] = FieldValue.increment(1);
+      }
+    }
+
     await FirebaseFirestore.instance
         .collection('chatRooms')
         .doc(widget.room.id)
         .update({
       'lastMessage': text,
       'lastMessageTime': FieldValue.serverTimestamp(),
-      'lastRead.$uid': FieldValue.serverTimestamp(), // 내가 보낸 건 자동 읽음
+      'lastRead.$uid': FieldValue.serverTimestamp(),
+      ...unreadUpdates,
     });
 
     _ctrl.clear();
+    _focusNode.requestFocus(); // 전송 후 키보드 유지
   }
 
   @override
@@ -684,7 +727,9 @@ class ChatScreenState extends State<ChatScreen> {
 
                 final docs = snapshot.data?.docs ?? [];
 
-                return ListView.builder(
+                return GestureDetector(
+                  onTap: () => FocusScope.of(context).unfocus(),
+                  child: ListView.builder(
                   padding: const EdgeInsets.all(16),
                   reverse: true,
                   itemCount: docs.length,
@@ -706,6 +751,7 @@ class ChatScreenState extends State<ChatScreen> {
                       room: currentRoom, // ← 실시간 room 전달
                     );
                   },
+                  ),
                 );
               },
             ),
@@ -718,6 +764,7 @@ class ChatScreenState extends State<ChatScreen> {
                 Expanded(
                   child: TextField(
                     controller: _ctrl,
+                    focusNode: _focusNode,
                     decoration: const InputDecoration(
                       hintText: '메시지를 입력하세요',
                       contentPadding:

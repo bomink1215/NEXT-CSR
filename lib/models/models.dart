@@ -236,6 +236,7 @@ class ChatRoom {
   final String authorUid;
   final Map<String, DateTime> lastRead;
   final Map<String, DateTime> joinedAt;
+  final Map<String, int> unreadCounts; // uid → 미읽은 메시지 수
 
   ChatRoom({
     required this.id,
@@ -249,6 +250,7 @@ class ChatRoom {
     this.authorUid = '',
     this.lastRead = const {},
     this.joinedAt = const {},
+    this.unreadCounts = const {},
   });
 
   factory ChatRoom.fromMap(Map<String, dynamic> data, String documentId) {
@@ -278,6 +280,10 @@ class ChatRoom {
       authorUid: data['authorUid'] ?? '',
       lastRead: lastReadMap,
       joinedAt: joinedAtMap,
+      unreadCounts: Map<String, int>.from(
+        (data['unreadCounts'] as Map<String, dynamic>? ?? {})
+            .map((k, v) => MapEntry(k, (v as num).toInt())),
+      ),
     );
   }
 }

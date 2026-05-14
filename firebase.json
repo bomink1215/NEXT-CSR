@@ -1,1 +1,39 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"gatchi-sapsida","appId":"1:787164281308:android:9245e7b43bbfa344ec7719","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"gatchi-sapsida","configurations":{"android":"1:787164281308:android:9245e7b43bbfa344ec7719","ios":"1:787164281308:ios:029bf01157b8e1eeec7719","macos":"1:787164281308:ios:029bf01157b8e1eeec7719","web":"1:787164281308:web:f0b2d98e3471e715ec7719","windows":"1:787164281308:web:28af7c41987ced9fec7719"}}}}}}
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "gatchi-sapsida",
+          "appId": "1:787164281308:android:9245e7b43bbfa344ec7719",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "gatchi-sapsida",
+          "configurations": {
+            "android": "1:787164281308:android:9245e7b43bbfa344ec7719",
+            "ios": "1:787164281308:ios:029bf01157b8e1eeec7719",
+            "macos": "1:787164281308:ios:029bf01157b8e1eeec7719",
+            "web": "1:787164281308:web:f0b2d98e3471e715ec7719",
+            "windows": "1:787164281308:web:28af7c41987ced9fec7719"
+          }
+        }
+      }
+    }
+  },
+  "hosting": {
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
+}
