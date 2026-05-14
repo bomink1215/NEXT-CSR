@@ -12,6 +12,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../models/user_store.dart';
 import './chat_list_screen.dart';
 import 'package:provider/provider.dart';
+import '../utils/notification_service.dart';
+import '../utils/location_service.dart';
 
 class GroupBuyScreen extends StatefulWidget {
   const GroupBuyScreen({super.key});
@@ -38,6 +40,7 @@ class _GroupBuyScreenState extends State<GroupBuyScreen> {
       backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('공동구매')),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'groupBuyFab',
         onPressed: () => _showCreateSheet(context),
         backgroundColor: AppColors.buyColor,
         icon: const Icon(Icons.add, color: Colors.white),
@@ -58,7 +61,8 @@ class _GroupBuyScreenState extends State<GroupBuyScreen> {
                 prefixIcon: const Icon(Icons.search, color: AppColors.textHint),
                 suffixIcon: _searchQuery.isNotEmpty
                     ? IconButton(
-                        icon: const Icon(Icons.close, color: AppColors.textHint),
+                        icon:
+                            const Icon(Icons.close, color: AppColors.textHint),
                         onPressed: () => setState(() {
                           _searchQuery = '';
                           _searchController.clear();
@@ -78,7 +82,8 @@ class _GroupBuyScreenState extends State<GroupBuyScreen> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: AppColors.buyColor, width: 1.5),
+                  borderSide:
+                      const BorderSide(color: AppColors.buyColor, width: 1.5),
                 ),
               ),
             ),
@@ -159,7 +164,10 @@ class _GroupBuyScreenState extends State<GroupBuyScreen> {
                     : categoryDocs.where((doc) {
                         final data = doc.data() as Map<String, dynamic>;
                         final q = _searchQuery.toLowerCase();
-                        return (data['title'] ?? '').toString().toLowerCase().contains(q);
+                        return (data['title'] ?? '')
+                            .toString()
+                            .toLowerCase()
+                            .contains(q);
                       }).toList())
                   ..sort((a, b) {
                     final aD = a.data() as Map;
@@ -213,6 +221,8 @@ class _GroupBuyScreenState extends State<GroupBuyScreen> {
                           authorUid: data['authorUid'] ?? '',
                           createdAt: (data['createdAt'] as Timestamp).toDate(),
                           isDelivery: data['category'] == '배달음식',
+                          meetingPlace: data['meetingPlace'] ?? '', // ← 추가
+                          deadline: (data['deadline'] as Timestamp?)?.toDate(),
                         ),
                       ),
                     );
@@ -236,16 +246,38 @@ class _GroupBuyScreenState extends State<GroupBuyScreen> {
   }
 }
 
-class _GroupBuyCard extends StatelessWidget {
+class _GroupBuyCard extends StatefulWidget {
   final GroupBuyPost post;
-
   const _GroupBuyCard({required this.post});
+
+  @override
+  State<_GroupBuyCard> createState() => _GroupBuyCardState();
+}
+
+class _GroupBuyCardState extends State<_GroupBuyCard> {
+  int? _walkMinutes;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _calcWalkMinutes();
+  }
+
+  Future<void> _calcWalkMinutes() async {
+    final store = UserStoreProvider.of(context);
+    if (store.homeAddress.isEmpty || widget.post.meetingPlace.isEmpty) return;
+    final minutes = await LocationService.getWalkMinutesBetween(
+      store.homeAddress,
+      widget.post.meetingPlace,
+    );
+    if (mounted) setState(() => _walkMinutes = minutes);
+  }
 
   @override
   Widget build(BuildContext context) {
     final userStore = UserStoreProvider.of(context);
-    final isAuthor = userStore.uid.isNotEmpty &&
-        userStore.uid == post.authorUid;
+    final isAuthor =
+        userStore.uid.isNotEmpty && userStore.uid == widget.post.authorUid;
 
     return GestureDetector(
       onTap: () => _showDetail(context),
@@ -254,14 +286,14 @@ class _GroupBuyCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: isAuthor
               ? AppColors.primary.withOpacity(0.06)
-              : post.isFull
+              : widget.post.isFull
                   ? AppColors.textHint.withOpacity(0.07)
                   : AppColors.surface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isAuthor
                 ? AppColors.primary.withOpacity(0.3)
-                : post.isFull
+                : widget.post.isFull
                     ? AppColors.textHint.withOpacity(0.25)
                     : AppColors.divider,
           ),
@@ -269,11 +301,11 @@ class _GroupBuyCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (post.imageUrl.isNotEmpty) ...[
+            if (widget.post.imageUrl.isNotEmpty) ...[
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),
                 child: CachedNetworkImage(
-                  imageUrl: post.imageUrl,
+                  imageUrl: widget.post.imageUrl,
                   width: double.infinity,
                   height: 150,
                   fit: BoxFit.cover,
@@ -290,21 +322,24 @@ class _GroupBuyCard extends StatelessWidget {
             Row(
               children: [
                 TagBadge(
-                  label: post.category,
-                  color: post.isDelivery
+                  label: widget.post.category,
+                  color: widget.post.isDelivery
                       ? AppColors.secondary
                       : AppColors.buyColor,
                 ),
                 const SizedBox(width: 8),
-                if (post.isDelivery)
+                if (widget.post.isDelivery)
                   TagBadge(label: '🛵 배달소분', color: AppColors.secondary),
                 const Spacer(),
-                WalkBadge(minutes: post.walkMinutes),
+                if (_walkMinutes != null)
+                  WalkBadge(minutes: _walkMinutes!)
+                else if (widget.post.meetingPlace.isNotEmpty)
+                  const WalkBadge(minutes: 5),
               ],
             ),
             const SizedBox(height: 10),
             Text(
-              post.title,
+              widget.post.title,
               style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
@@ -318,25 +353,40 @@ class _GroupBuyCard extends StatelessWidget {
                     size: 13, color: AppColors.textHint),
                 const SizedBox(width: 2),
                 Text(
-                  post.location,
-                  style:
-                      const TextStyle(fontSize: 12, color: AppColors.textHint),
+                  widget.post.location,
+                  style: const TextStyle(
+                      fontSize: 12, color: AppColors.textHint),
                 ),
                 const SizedBox(width: 8),
                 const Icon(Icons.person_outline,
                     size: 13, color: AppColors.textHint),
                 const SizedBox(width: 2),
                 Text(
-                  post.authorName,
-                  style:
-                      const TextStyle(fontSize: 12, color: AppColors.textHint),
+                  widget.post.authorName,
+                  style: const TextStyle(
+                      fontSize: 12, color: AppColors.textHint),
                 ),
               ],
             ),
+            if (widget.post.meetingPlace.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  const Icon(Icons.place_outlined,
+                      size: 13, color: AppColors.textHint),
+                  const SizedBox(width: 2),
+                  Text(
+                    '거래 희망 장소: ${widget.post.meetingPlace}',
+                    style: const TextStyle(
+                        fontSize: 12, color: AppColors.textHint),
+                  ),
+                ],
+              ),
+            ],
             const SizedBox(height: 12),
             ParticipantProgress(
-              current: post.currentParticipants,
-              max: post.maxParticipants,
+              current: widget.post.currentParticipants,
+              max: widget.post.maxParticipants,
               color: AppColors.buyColor,
             ),
             const SizedBox(height: 12),
@@ -348,7 +398,7 @@ class _GroupBuyCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '총 ${_formatPrice(post.totalPrice)}원',
+                      '총 ${_formatPrice(widget.post.totalPrice)}원',
                       style: const TextStyle(
                         fontSize: 12,
                         color: AppColors.textSecondary,
@@ -356,7 +406,7 @@ class _GroupBuyCard extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      '1인 ${_formatPrice(post.unitPrice)}원',
+                      '1인 ${_formatPrice(widget.post.unitPrice)}원',
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
@@ -372,7 +422,8 @@ class _GroupBuyCard extends StatelessWidget {
                       TextButton(
                         onPressed: () => _showEditSheet(context),
                         style: TextButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 8),
                             minimumSize: Size.zero,
                             tapTargetSize: MaterialTapTargetSize.shrinkWrap),
                         child: const Text('수정',
@@ -382,10 +433,13 @@ class _GroupBuyCard extends StatelessWidget {
                                 fontWeight: FontWeight.w600)),
                       ),
                       TextButton(
-                        onPressed: () =>
-                            _deletePost(context, post.id, post.authorName),
+                        onPressed: () => _deletePost(
+                            context,
+                            widget.post.id,
+                            widget.post.authorName),
                         style: TextButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 8),
                             minimumSize: Size.zero,
                             tapTargetSize: MaterialTapTargetSize.shrinkWrap),
                         child: const Text('삭제',
@@ -395,7 +449,7 @@ class _GroupBuyCard extends StatelessWidget {
                                 fontWeight: FontWeight.w600)),
                       ),
                     ],
-                  )
+                  ),
               ],
             ),
           ],
@@ -407,7 +461,6 @@ class _GroupBuyCard extends StatelessWidget {
   Future<void> _deletePost(
       BuildContext context, String postId, String authorName) async {
     final firestore = FirebaseFirestore.instance;
-
     bool confirm = await showDialog(
           context: context,
           builder: (ctx) => AlertDialog(
@@ -425,16 +478,13 @@ class _GroupBuyCard extends StatelessWidget {
           ),
         ) ??
         false;
-
     if (!confirm) return;
     try {
       final batch = firestore.batch();
       batch.delete(firestore.collection('posts').doc(postId));
       batch.delete(firestore.collection('chatRooms').doc(postId));
       await batch.commit();
-
       if (!context.mounted) return;
-      // Navigator.pop은 호출하지 않음 — StreamBuilder가 자동으로 목록에서 제거
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('게시글이 삭제되었습니다.')));
     } catch (e) {
@@ -449,7 +499,7 @@ class _GroupBuyCard extends StatelessWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _GroupBuyDetail(post: post),
+      builder: (_) => _GroupBuyDetail(post: widget.post),
     );
   }
 
@@ -458,7 +508,7 @@ class _GroupBuyCard extends StatelessWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _EditGroupBuySheet(post: post),
+      builder: (_) => _EditGroupBuySheet(post: widget.post),
     );
   }
 
@@ -510,8 +560,8 @@ class _GroupBuyDetail extends StatelessWidget {
                         placeholder: (_, __) => Container(
                           height: 200,
                           color: AppColors.cardBg,
-                          child: const Center(
-                              child: CircularProgressIndicator()),
+                          child:
+                              const Center(child: CircularProgressIndicator()),
                         ),
                         errorWidget: (_, __, ___) => const SizedBox.shrink(),
                       ),
@@ -535,10 +585,48 @@ class _GroupBuyDetail extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Text(
-                    '📍 ${post.location}  •  👤 ${post.authorName}',
-                    style: const TextStyle(
-                        fontSize: 13, color: AppColors.textSecondary),
+                  Row(
+                    children: [
+                      Text(
+                        '📍 ${post.location}  •  👤 ${post.authorName}',
+                        style: const TextStyle(
+                            fontSize: 13, color: AppColors.textSecondary),
+                      ),
+                      const SizedBox(width: 8),
+                      StreamBuilder<DocumentSnapshot>(
+                        stream: FirebaseFirestore.instance
+                            .collection('users')
+                            .doc(post.authorUid)
+                            .snapshots(),
+                        builder: (context, snapshot) {
+                          if (!snapshot.hasData) return const SizedBox.shrink();
+                          final data = snapshot.data?.data() as Map<String, dynamic>? ?? {};
+                          final avgRating = ((data['avgRating'] ?? 0.0) as num).toDouble();
+                          if (avgRating == 0) return const SizedBox.shrink();
+                          return Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: AppColors.buyColor.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.star, size: 12, color: Color(0xFFFFC107)),
+                                const SizedBox(width: 3),
+                                Text(
+                                  avgRating.toStringAsFixed(1),
+                                  style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.buyColor),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 20),
                   Container(
@@ -574,8 +662,8 @@ class _GroupBuyDetail extends StatelessWidget {
                   const SizedBox(height: 24),
                   Builder(builder: (ctx) {
                     final store = UserStoreProvider.of(ctx);
-                    final isAuthor = store.uid.isNotEmpty &&
-                        store.uid == post.authorUid;
+                    final isAuthor =
+                        store.uid.isNotEmpty && store.uid == post.authorUid;
                     // 내가 만든 글 → 배너 표시
                     if (isAuthor) {
                       return Container(
@@ -637,10 +725,10 @@ class _GroupBuyDetail extends StatelessWidget {
         showDialog(
           context: context,
           builder: (ctx) => AlertDialog(
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16)),
-            content: const Text('이미 참여한 공동구매입니다.',
-                style: TextStyle(fontSize: 15)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            content:
+                const Text('이미 참여한 공동구매입니다.', style: TextStyle(fontSize: 15)),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
@@ -694,6 +782,7 @@ class _GroupBuyDetail extends StatelessWidget {
               'type': 'groupBuy',
               'avatarEmoji': '🛒',
               'unreadCount': 0,
+              'joinedAt': {userStore.uid: FieldValue.serverTimestamp()},
             },
             SetOptions(merge: true));
 
@@ -737,13 +826,21 @@ class _GroupBuyDetail extends StatelessWidget {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('확인',
-                  style: TextStyle(color: AppColors.buyColor)),
+              child:
+                  const Text('확인', style: TextStyle(color: AppColors.buyColor)),
             ),
           ],
         ),
       );
     }
+
+    // 참여 성공 후 ㅡ 글 작성자한테 알림
+    await NotificationService.send(
+      toUid: post.authorUid,
+      type: 'groupBuy',
+      title: '🛒 공동구매에 새 참여자가 왔어요',
+      body: '${userStore.name}님이 "${post.title}"에 참여했어요.',
+    );
   }
 
   Widget _InfoItem(String label, String value, {bool highlight = false}) {
@@ -780,15 +877,21 @@ class _CreateGroupBuySheet extends StatefulWidget {
 class _CreateGroupBuySheetState extends State<_CreateGroupBuySheet> {
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _totalPriceController = TextEditingController();
-  File? _selectedFile;
   String _type = '생활용품';
   int _members = 2;
   bool _isUploading = false;
+  bool _hasDeadline = false;
+  DateTime? _deadline;
+  bool _useCustomDate = false;
+  final _deadlineDaysController = TextEditingController();
+  final TextEditingController _meetingPlaceController = TextEditingController();
 
   @override
   void dispose() {
     _titleController.dispose();
     _totalPriceController.dispose();
+    _deadlineDaysController.dispose();
+    _meetingPlaceController.dispose();
     super.dispose();
   }
 
@@ -876,12 +979,6 @@ class _CreateGroupBuySheetState extends State<_CreateGroupBuySheet> {
                           }).toList(),
                         ),
                         const SizedBox(height: 16),
-                        ImagePickerModule(
-                          label: '공동구매 물품 사진을 올려주세요!',
-                          onImageSelected: (file) =>
-                              setState(() => _selectedFile = file),
-                        ),
-                        const SizedBox(height: 12),
                         const Text('상품명',
                             style: TextStyle(
                                 fontSize: 14,
@@ -967,6 +1064,324 @@ class _CreateGroupBuySheetState extends State<_CreateGroupBuySheet> {
                             ),
                           ],
                         ),
+                        const Text('거래 희망 장소',
+                            style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textSecondary)),
+                        const SizedBox(height: 4),
+                        const Text('거래하고 싶은 장소를 미리 정해두세요',
+                            style: TextStyle(
+                                fontSize: 12, color: AppColors.textHint)),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _meetingPlaceController,
+                          decoration: const InputDecoration(
+                            hintText: '예) 안암역 2번 출구',
+                            prefixIcon: Icon(Icons.place_outlined),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        const SizedBox(height: 16),
+                        // ── 마감기한 ──
+                        Row(
+                          children: [
+                            Checkbox(
+                              value: _hasDeadline,
+                              onChanged: (v) => setState(() {
+                                _hasDeadline = v ?? false;
+                                if (!_hasDeadline) {
+                                  _deadline = null;
+                                  _deadlineDaysController.clear();
+                                }
+                              }),
+                              activeColor: AppColors.buyColor,
+                            ),
+                            const Text('마감기한 설정',
+                                style: TextStyle(
+                                    fontSize: 14, fontWeight: FontWeight.w600)),
+                          ],
+                        ),
+                        if (_hasDeadline) ...[
+                          const SizedBox(height: 8),
+                          if (_type == '배달음식') ...[
+                            // ── 배달음식: 몇 시간 후 / 시간 직접 선택 ──
+                            Row(
+                              children: [
+                                GestureDetector(
+                                  onTap: () => setState(() {
+                                    _useCustomDate = false;
+                                    _deadline = null;
+                                    _deadlineDaysController.clear();
+                                  }),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 16, vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: !_useCustomDate
+                                          ? AppColors.buyColor
+                                          : AppColors.surface,
+                                      borderRadius: BorderRadius.circular(20),
+                                      border: Border.all(
+                                          color: !_useCustomDate
+                                              ? AppColors.buyColor
+                                              : AppColors.divider),
+                                    ),
+                                    child: Text('몇 시간 후',
+                                        style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w600,
+                                            color: !_useCustomDate
+                                                ? Colors.white
+                                                : AppColors.textSecondary)),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                GestureDetector(
+                                  onTap: () => setState(() {
+                                    _useCustomDate = true;
+                                    _deadline = null;
+                                    _deadlineDaysController.clear();
+                                  }),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 16, vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: _useCustomDate
+                                          ? AppColors.buyColor
+                                          : AppColors.surface,
+                                      borderRadius: BorderRadius.circular(20),
+                                      border: Border.all(
+                                          color: _useCustomDate
+                                              ? AppColors.buyColor
+                                              : AppColors.divider),
+                                    ),
+                                    child: Text('시간 직접 선택',
+                                        style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w600,
+                                            color: _useCustomDate
+                                                ? Colors.white
+                                                : AppColors.textSecondary)),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            if (!_useCustomDate) ...[
+                              // 몇 시간 후 입력
+                              TextField(
+                                controller: _deadlineDaysController,
+                                keyboardType: TextInputType.number,
+                                onChanged: (v) {
+                                  final val = int.tryParse(v);
+                                  if (val != null && val > 0) {
+                                    setState(() => _deadline = DateTime.now()
+                                        .add(Duration(hours: val)));
+                                  }
+                                },
+                                decoration: const InputDecoration(
+                                  hintText: '예) 2',
+                                  suffixText: '시간 후',
+                                ),
+                              ),
+                            ] else ...[
+                              // 시간 직접 선택
+                              GestureDetector(
+                                onTap: () async {
+                                  final picked = await showTimePicker(
+                                    context: context,
+                                    initialTime: TimeOfDay.now(),
+                                  );
+                                  if (picked != null) {
+                                    setState(() {
+                                      final now = DateTime.now();
+                                      _deadline = DateTime(now.year, now.month,
+                                          now.day, picked.hour, picked.minute);
+                                    });
+                                  }
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 14),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.cardBg,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                        color: AppColors.buyColor
+                                            .withOpacity(0.5)),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.access_time,
+                                          size: 18, color: AppColors.buyColor),
+                                      const SizedBox(width: 10),
+                                      Text(
+                                        _deadline != null
+                                            ? '오늘 ${_deadline!.hour}시 ${_deadline!.minute.toString().padLeft(2, '0')}분까지'
+                                            : '시간을 선택하세요',
+                                        style: const TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                            color: AppColors.textPrimary),
+                                      ),
+                                      const Spacer(),
+                                      const Icon(Icons.arrow_forward_ios,
+                                          size: 13, color: AppColors.textHint),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                            if (_deadline != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8),
+                                child: Text(
+                                  '마감시간: 오늘 ${_deadline!.hour}시 ${_deadline!.minute.toString().padLeft(2, '0')}분',
+                                  style: const TextStyle(
+                                      fontSize: 13, color: AppColors.primary),
+                                ),
+                              ),
+                          ] else ...[
+                            // ── 일반: 며칠 후 / 날짜 직접 선택 ──
+                            Row(
+                              children: [
+                                GestureDetector(
+                                  onTap: () => setState(() {
+                                    _useCustomDate = false;
+                                    _deadline = null;
+                                    _deadlineDaysController.clear();
+                                  }),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 16, vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: !_useCustomDate
+                                          ? AppColors.buyColor
+                                          : AppColors.surface,
+                                      borderRadius: BorderRadius.circular(20),
+                                      border: Border.all(
+                                          color: !_useCustomDate
+                                              ? AppColors.buyColor
+                                              : AppColors.divider),
+                                    ),
+                                    child: Text('며칠 후',
+                                        style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w600,
+                                            color: !_useCustomDate
+                                                ? Colors.white
+                                                : AppColors.textSecondary)),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                GestureDetector(
+                                  onTap: () => setState(() {
+                                    _useCustomDate = true;
+                                    _deadline = null;
+                                    _deadlineDaysController.clear();
+                                  }),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 16, vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: _useCustomDate
+                                          ? AppColors.buyColor
+                                          : AppColors.surface,
+                                      borderRadius: BorderRadius.circular(20),
+                                      border: Border.all(
+                                          color: _useCustomDate
+                                              ? AppColors.buyColor
+                                              : AppColors.divider),
+                                    ),
+                                    child: Text('날짜 직접 선택',
+                                        style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w600,
+                                            color: _useCustomDate
+                                                ? Colors.white
+                                                : AppColors.textSecondary)),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            if (!_useCustomDate) ...[
+                              // 며칠 후 입력
+                              TextField(
+                                controller: _deadlineDaysController,
+                                keyboardType: TextInputType.number,
+                                onChanged: (v) {
+                                  final val = int.tryParse(v);
+                                  if (val != null && val > 0) {
+                                    setState(() => _deadline = DateTime.now()
+                                        .add(Duration(days: val)));
+                                  }
+                                },
+                                decoration: const InputDecoration(
+                                  hintText: '예) 5',
+                                  suffixText: '일 후',
+                                ),
+                              ),
+                            ] else ...[
+                              // 날짜 직접 선택
+                              GestureDetector(
+                                onTap: () async {
+                                  final picked = await showDatePicker(
+                                    context: context,
+                                    initialDate: DateTime.now()
+                                        .add(const Duration(days: 1)),
+                                    firstDate: DateTime.now()
+                                        .add(const Duration(days: 1)),
+                                    lastDate: DateTime.now()
+                                        .add(const Duration(days: 365)),
+                                  );
+                                  if (picked != null)
+                                    setState(() => _deadline = picked);
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 14),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.cardBg,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                        color: AppColors.buyColor
+                                            .withOpacity(0.5)),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.calendar_today_outlined,
+                                          size: 18, color: AppColors.buyColor),
+                                      const SizedBox(width: 10),
+                                      Text(
+                                        _deadline != null
+                                            ? '${_deadline!.year}년 ${_deadline!.month}월 ${_deadline!.day}일'
+                                            : '날짜를 선택하세요',
+                                        style: const TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                            color: AppColors.textPrimary),
+                                      ),
+                                      const Spacer(),
+                                      const Icon(Icons.arrow_forward_ios,
+                                          size: 13, color: AppColors.textHint),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                            if (_deadline != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8),
+                                child: Text(
+                                  '마감일: ${_deadline!.year}년 ${_deadline!.month}월 ${_deadline!.day}일',
+                                  style: const TextStyle(
+                                      fontSize: 13, color: AppColors.primary),
+                                ),
+                              ),
+                          ],
+                        ],
                         const SizedBox(height: 24),
                         SizedBox(
                           width: double.infinity,
@@ -1002,12 +1417,6 @@ class _CreateGroupBuySheetState extends State<_CreateGroupBuySheet> {
     setState(() => _isUploading = true);
 
     try {
-      String imageUrl = '';
-      if (_selectedFile != null) {
-        imageUrl =
-            await StorageService.uploadPostImage('groupBuy', _selectedFile!);
-      }
-
       final totalPrice =
           int.parse(_totalPriceController.text.replaceAll(',', ''));
 
@@ -1015,7 +1424,6 @@ class _CreateGroupBuySheetState extends State<_CreateGroupBuySheet> {
         'type': 'groupBuy',
         'title': _titleController.text.trim(),
         'category': _type,
-        'imageUrl': imageUrl,
         'totalPrice': totalPrice,
         'unitPrice': _unitPrice,
         'maxParticipants': _members,
@@ -1026,6 +1434,8 @@ class _CreateGroupBuySheetState extends State<_CreateGroupBuySheet> {
         'createdAt': FieldValue.serverTimestamp(),
         'isFull': false,
         'members': [userStore.name],
+        'meetingPlace': _meetingPlaceController.text.trim(),
+        'deadline': _deadline != null ? Timestamp.fromDate(_deadline!) : null,
       });
 
       if (!mounted) return;
@@ -1038,6 +1448,25 @@ class _CreateGroupBuySheetState extends State<_CreateGroupBuySheet> {
     } finally {
       if (mounted) setState(() => _isUploading = false);
     }
+
+    // 같은 동네 사용자들한테 새 글 알림
+    // (현재는 글쓴이 제외한 모든 users 컬렉션에서 같은 location인 uid 조회)
+    final usersSnap = await FirebaseFirestore.instance
+        .collection('users')
+        .where('location', isEqualTo: userStore.location)
+        .get();
+
+    final otherUids = usersSnap.docs
+        .map((d) => d.id)
+        .where((id) => id != userStore.uid)
+        .toList();
+
+    await NotificationService.sendToMany(
+      toUids: otherUids,
+      type: 'groupBuy',
+      title: '🛒 새 공동구매 글이 올라왔어요',
+      body: '${userStore.location} • ${_titleController.text.trim()}',
+    );
   }
 
   String _formatPrice(int price) => price
@@ -1060,6 +1489,10 @@ class _EditGroupBuySheetState extends State<_EditGroupBuySheet> {
   late String _type;
   late int _members;
   bool _isSaving = false;
+  DateTime? _deadline;
+  bool _hasDeadline = false;
+  bool _useCustomDate = false;
+  final _deadlineDaysController = TextEditingController();
 
   final List<String> _types = ['식료품', '생활용품', '배달음식'];
 
@@ -1071,6 +1504,8 @@ class _EditGroupBuySheetState extends State<_EditGroupBuySheet> {
         TextEditingController(text: widget.post.totalPrice.toString());
     _type = widget.post.category;
     _members = widget.post.maxParticipants;
+    _deadline = widget.post.deadline;
+    _hasDeadline = _deadline != null;
   }
 
   @override
@@ -1078,6 +1513,7 @@ class _EditGroupBuySheetState extends State<_EditGroupBuySheet> {
     _titleController.dispose();
     _totalPriceController.dispose();
     super.dispose();
+    _deadlineDaysController.dispose();
   }
 
   int get _unitPrice {
@@ -1106,6 +1542,7 @@ class _EditGroupBuySheetState extends State<_EditGroupBuySheet> {
         'totalPrice': totalPrice,
         'unitPrice': _unitPrice,
         'maxParticipants': _members,
+        'deadline': _deadline != null ? Timestamp.fromDate(_deadline!) : null,
       });
       if (!mounted) return;
       Navigator.pop(context);
@@ -1124,8 +1561,8 @@ class _EditGroupBuySheetState extends State<_EditGroupBuySheet> {
   Widget build(BuildContext context) {
     return Container(
       height: MediaQuery.of(context).size.height * 0.75,
-      padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding:
+          EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       decoration: const BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -1134,7 +1571,8 @@ class _EditGroupBuySheetState extends State<_EditGroupBuySheet> {
         children: [
           Container(
             margin: const EdgeInsets.only(top: 12),
-            width: 40, height: 4,
+            width: 40,
+            height: 4,
             decoration: BoxDecoration(
                 color: AppColors.divider,
                 borderRadius: BorderRadius.circular(2)),
@@ -1155,14 +1593,19 @@ class _EditGroupBuySheetState extends State<_EditGroupBuySheet> {
                 children: [
                   const SizedBox(height: 8),
                   const Text('제목',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600,
+                      style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
                           color: AppColors.textSecondary)),
                   const SizedBox(height: 8),
-                  TextField(controller: _titleController,
+                  TextField(
+                      controller: _titleController,
                       decoration: const InputDecoration(hintText: '공동구매 제목')),
                   const SizedBox(height: 16),
                   const Text('카테고리',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600,
+                      style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
                           color: AppColors.textSecondary)),
                   const SizedBox(height: 8),
                   Wrap(
@@ -1178,19 +1621,26 @@ class _EditGroupBuySheetState extends State<_EditGroupBuySheet> {
                             color: sel ? AppColors.buyColor : AppColors.cardBg,
                             borderRadius: BorderRadius.circular(20),
                             border: Border.all(
-                                color: sel ? AppColors.buyColor : AppColors.divider),
+                                color: sel
+                                    ? AppColors.buyColor
+                                    : AppColors.divider),
                           ),
                           child: Text(t,
                               style: TextStyle(
-                                  fontSize: 13, fontWeight: FontWeight.w600,
-                                  color: sel ? Colors.white : AppColors.textSecondary)),
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: sel
+                                      ? Colors.white
+                                      : AppColors.textSecondary)),
                         ),
                       );
                     }).toList(),
                   ),
                   const SizedBox(height: 16),
                   const Text('총 금액',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600,
+                      style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
                           color: AppColors.textSecondary)),
                   const SizedBox(height: 8),
                   TextField(
@@ -1201,14 +1651,17 @@ class _EditGroupBuySheetState extends State<_EditGroupBuySheet> {
                       hintText: '원',
                       suffixText: '1인 ${_unitPrice}원',
                       suffixStyle: const TextStyle(
-                          color: AppColors.primary, fontWeight: FontWeight.w700),
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w700),
                     ),
                   ),
                   const SizedBox(height: 16),
                   Row(
                     children: [
                       const Text('인원수',
-                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600,
+                          style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
                               color: AppColors.textSecondary)),
                       const Spacer(),
                       IconButton(
@@ -1230,6 +1683,304 @@ class _EditGroupBuySheetState extends State<_EditGroupBuySheet> {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 16),
+                  // ── 마감기한 ──
+                  Row(
+                    children: [
+                      Checkbox(
+                        value: _hasDeadline,
+                        onChanged: (v) => setState(() {
+                          _hasDeadline = v ?? false;
+                          if (!_hasDeadline) {
+                            _deadline = null;
+                            _deadlineDaysController.clear();
+                          }
+                        }),
+                        activeColor: AppColors.buyColor,
+                      ),
+                      const Text('마감기한 설정',
+                          style: TextStyle(
+                              fontSize: 14, fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                  if (_hasDeadline) ...[
+                    const SizedBox(height: 8),
+                    if (_type == '배달음식') ...[
+                      // ── 배달음식: 몇 시간 후 / 시간 직접 선택 ──
+                      Row(
+                        children: [
+                          GestureDetector(
+                            onTap: () => setState(() {
+                              _useCustomDate = false;
+                              _deadline = null;
+                              _deadlineDaysController.clear();
+                            }),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: !_useCustomDate
+                                    ? AppColors.buyColor
+                                    : AppColors.surface,
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                    color: !_useCustomDate
+                                        ? AppColors.buyColor
+                                        : AppColors.divider),
+                              ),
+                              child: Text('몇 시간 후',
+                                  style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: !_useCustomDate
+                                          ? Colors.white
+                                          : AppColors.textSecondary)),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          GestureDetector(
+                            onTap: () => setState(() {
+                              _useCustomDate = true;
+                              _deadline = null;
+                              _deadlineDaysController.clear();
+                            }),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: _useCustomDate
+                                    ? AppColors.buyColor
+                                    : AppColors.surface,
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                    color: _useCustomDate
+                                        ? AppColors.buyColor
+                                        : AppColors.divider),
+                              ),
+                              child: Text('시간 직접 선택',
+                                  style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: _useCustomDate
+                                          ? Colors.white
+                                          : AppColors.textSecondary)),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      if (!_useCustomDate) ...[
+                        // 몇 시간 후 입력
+                        TextField(
+                          controller: _deadlineDaysController,
+                          keyboardType: TextInputType.number,
+                          onChanged: (v) {
+                            final val = int.tryParse(v);
+                            if (val != null && val > 0) {
+                              setState(() => _deadline =
+                                  DateTime.now().add(Duration(hours: val)));
+                            }
+                          },
+                          decoration: const InputDecoration(
+                            hintText: '예) 2',
+                            suffixText: '시간 후',
+                          ),
+                        ),
+                      ] else ...[
+                        // 시간 직접 선택
+                        GestureDetector(
+                          onTap: () async {
+                            final picked = await showTimePicker(
+                              context: context,
+                              initialTime: TimeOfDay.now(),
+                            );
+                            if (picked != null) {
+                              setState(() {
+                                final now = DateTime.now();
+                                _deadline = DateTime(now.year, now.month,
+                                    now.day, picked.hour, picked.minute);
+                              });
+                            }
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 14),
+                            decoration: BoxDecoration(
+                              color: AppColors.cardBg,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                  color: AppColors.buyColor.withOpacity(0.5)),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.access_time,
+                                    size: 18, color: AppColors.buyColor),
+                                const SizedBox(width: 10),
+                                Text(
+                                  _deadline != null
+                                      ? '오늘 ${_deadline!.hour}시 ${_deadline!.minute.toString().padLeft(2, '0')}분까지'
+                                      : '시간을 선택하세요',
+                                  style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.textPrimary),
+                                ),
+                                const Spacer(),
+                                const Icon(Icons.arrow_forward_ios,
+                                    size: 13, color: AppColors.textHint),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                      if (_deadline != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Text(
+                            '마감시간: 오늘 ${_deadline!.hour}시 ${_deadline!.minute.toString().padLeft(2, '0')}분',
+                            style: const TextStyle(
+                                fontSize: 13, color: AppColors.primary),
+                          ),
+                        ),
+                    ] else ...[
+                      // ── 일반: 며칠 후 / 날짜 직접 선택 ──
+                      Row(
+                        children: [
+                          GestureDetector(
+                            onTap: () => setState(() {
+                              _useCustomDate = false;
+                              _deadline = null;
+                              _deadlineDaysController.clear();
+                            }),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: !_useCustomDate
+                                    ? AppColors.buyColor
+                                    : AppColors.surface,
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                    color: !_useCustomDate
+                                        ? AppColors.buyColor
+                                        : AppColors.divider),
+                              ),
+                              child: Text('며칠 후',
+                                  style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: !_useCustomDate
+                                          ? Colors.white
+                                          : AppColors.textSecondary)),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          GestureDetector(
+                            onTap: () => setState(() {
+                              _useCustomDate = true;
+                              _deadline = null;
+                              _deadlineDaysController.clear();
+                            }),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: _useCustomDate
+                                    ? AppColors.buyColor
+                                    : AppColors.surface,
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                    color: _useCustomDate
+                                        ? AppColors.buyColor
+                                        : AppColors.divider),
+                              ),
+                              child: Text('날짜 직접 선택',
+                                  style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: _useCustomDate
+                                          ? Colors.white
+                                          : AppColors.textSecondary)),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      if (!_useCustomDate) ...[
+                        // 며칠 후 입력
+                        TextField(
+                          controller: _deadlineDaysController,
+                          keyboardType: TextInputType.number,
+                          onChanged: (v) {
+                            final val = int.tryParse(v);
+                            if (val != null && val > 0) {
+                              setState(() => _deadline =
+                                  DateTime.now().add(Duration(days: val)));
+                            }
+                          },
+                          decoration: const InputDecoration(
+                            hintText: '예) 5',
+                            suffixText: '일 후',
+                          ),
+                        ),
+                      ] else ...[
+                        // 날짜 직접 선택
+                        GestureDetector(
+                          onTap: () async {
+                            final picked = await showDatePicker(
+                              context: context,
+                              initialDate:
+                                  DateTime.now().add(const Duration(days: 1)),
+                              firstDate:
+                                  DateTime.now().add(const Duration(days: 1)),
+                              lastDate:
+                                  DateTime.now().add(const Duration(days: 365)),
+                            );
+                            if (picked != null)
+                              setState(() => _deadline = picked);
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 14),
+                            decoration: BoxDecoration(
+                              color: AppColors.cardBg,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                  color: AppColors.buyColor.withOpacity(0.5)),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.calendar_today_outlined,
+                                    size: 18, color: AppColors.buyColor),
+                                const SizedBox(width: 10),
+                                Text(
+                                  _deadline != null
+                                      ? '${_deadline!.year}년 ${_deadline!.month}월 ${_deadline!.day}일'
+                                      : '날짜를 선택하세요',
+                                  style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.textPrimary),
+                                ),
+                                const Spacer(),
+                                const Icon(Icons.arrow_forward_ios,
+                                    size: 13, color: AppColors.textHint),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                      if (_deadline != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Text(
+                            '마감일: ${_deadline!.year}년 ${_deadline!.month}월 ${_deadline!.day}일',
+                            style: const TextStyle(
+                                fontSize: 13, color: AppColors.primary),
+                          ),
+                        ),
+                    ],
+                  ],
                   const SizedBox(height: 24),
                   SizedBox(
                     width: double.infinity,
@@ -1240,11 +1991,11 @@ class _EditGroupBuySheetState extends State<_EditGroupBuySheet> {
                           padding: const EdgeInsets.symmetric(vertical: 16)),
                       child: _isSaving
                           ? const SizedBox(
-                              height: 20, width: 20,
+                              height: 20,
+                              width: 20,
                               child: CircularProgressIndicator(
                                   color: Colors.white, strokeWidth: 2))
-                          : const Text('수정 완료',
-                              style: TextStyle(fontSize: 16)),
+                          : const Text('수정 완료', style: TextStyle(fontSize: 16)),
                     ),
                   ),
                   const SizedBox(height: 24),

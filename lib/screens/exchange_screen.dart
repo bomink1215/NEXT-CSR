@@ -10,6 +10,8 @@ import '../theme/app_theme.dart';
 import '../models/models.dart';
 import '../models/mock_data.dart';
 import '../widgets/common_widgets.dart';
+import '../utils/notification_service.dart';
+import '../utils/location_service.dart';
 
 class ExchangeScreen extends StatefulWidget {
   const ExchangeScreen({super.key});
@@ -34,6 +36,7 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
       backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('물물교환')),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'exchangeFab',
         onPressed: () => _showCreateSheet(context),
         backgroundColor: AppColors.exchangeColor,
         icon: const Icon(Icons.add, color: Colors.white),
@@ -86,7 +89,8 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
                 prefixIcon: const Icon(Icons.search, color: AppColors.textHint),
                 suffixIcon: _searchQuery.isNotEmpty
                     ? IconButton(
-                        icon: const Icon(Icons.close, color: AppColors.textHint),
+                        icon:
+                            const Icon(Icons.close, color: AppColors.textHint),
                         onPressed: () => setState(() {
                           _searchQuery = '';
                           _searchController.clear();
@@ -106,7 +110,8 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: AppColors.exchangeColor, width: 1.5),
+                  borderSide: const BorderSide(
+                      color: AppColors.exchangeColor, width: 1.5),
                 ),
               ),
             ),
@@ -136,9 +141,18 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
                       : docs.where((doc) {
                           final data = doc.data() as Map<String, dynamic>;
                           final q = _searchQuery.toLowerCase();
-                          return (data['title'] ?? '').toString().toLowerCase().contains(q) ||
-                              (data['offerItem'] ?? '').toString().toLowerCase().contains(q) ||
-                              (data['wantItem'] ?? '').toString().toLowerCase().contains(q);
+                          return (data['title'] ?? '')
+                                  .toString()
+                                  .toLowerCase()
+                                  .contains(q) ||
+                              (data['offerItem'] ?? '')
+                                  .toString()
+                                  .toLowerCase()
+                                  .contains(q) ||
+                              (data['wantItem'] ?? '')
+                                  .toString()
+                                  .toLowerCase()
+                                  .contains(q);
                         }).toList())
                     ..sort((a, b) {
                       final aD = a.data() as Map;
@@ -174,7 +188,8 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
                     itemCount: filteredDocs.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 10),
                     itemBuilder: (context, i) {
-                      final data = filteredDocs[i].data() as Map<String, dynamic>;
+                      final data =
+                          filteredDocs[i].data() as Map<String, dynamic>;
                       return RepaintBoundary(
                         child: _ExchangeCard(
                           post: ExchangePost(
@@ -188,11 +203,13 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
                             location: data['location'] ?? '안암동',
                             authorName: data['authorName'] ?? '익명',
                             authorUid: data['authorUid'] ?? '',
-                            createdAt: (data['createdAt'] as Timestamp).toDate(),
+                            createdAt:
+                                (data['createdAt'] as Timestamp).toDate(),
                             status: (data['status'] == 'done' ||
                                     data['status'] == 'completed')
                                 ? ExchangeStatus.done
                                 : ExchangeStatus.open,
+                            meetingPlace: data['meetingPlace'] ?? '',
                           ),
                         ),
                       );
@@ -225,6 +242,24 @@ class _ExchangeCard extends StatefulWidget {
 }
 
 class _ExchangeCardState extends State<_ExchangeCard> {
+  int? _walkMinutes;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _calcWalkMinutes();
+  }
+
+  Future<void> _calcWalkMinutes() async {
+    final store = UserStoreProvider.of(context);
+    if (store.homeAddress.isEmpty || widget.post.meetingPlace.isEmpty) return;
+    final minutes = await LocationService.getWalkMinutesBetween(
+      store.homeAddress,
+      widget.post.meetingPlace,
+    );
+    if (mounted) setState(() => _walkMinutes = minutes);
+  }
+
   Color get _statusColor {
     switch (widget.post.status) {
       case ExchangeStatus.open:
@@ -250,8 +285,8 @@ class _ExchangeCardState extends State<_ExchangeCard> {
   @override
   Widget build(BuildContext context) {
     final userStore = UserStoreProvider.of(context);
-    final bool isAuthor = userStore.uid.isNotEmpty &&
-        userStore.uid == widget.post.authorUid;
+    final bool isAuthor =
+        userStore.uid.isNotEmpty && userStore.uid == widget.post.authorUid;
 
     return GestureDetector(
       onTap: () => _showDetail(context),
@@ -298,7 +333,10 @@ class _ExchangeCardState extends State<_ExchangeCard> {
               children: [
                 TagBadge(label: _statusLabel, color: _statusColor),
                 const Spacer(),
-                WalkBadge(minutes: widget.post.walkMinutes),
+                if (_walkMinutes != null)
+                  WalkBadge(minutes: _walkMinutes!)
+                else if (widget.post.meetingPlace.isNotEmpty)
+                  const WalkBadge(minutes: 5),
               ],
             ),
             const SizedBox(height: 12),
@@ -577,8 +615,8 @@ class _ExchangeDetail extends StatelessWidget {
                         placeholder: (_, __) => Container(
                           height: 200,
                           color: AppColors.cardBg,
-                          child: const Center(
-                              child: CircularProgressIndicator()),
+                          child:
+                              const Center(child: CircularProgressIndicator()),
                         ),
                         errorWidget: (_, __, ___) => const SizedBox.shrink(),
                       ),
@@ -619,8 +657,8 @@ class _ExchangeDetail extends StatelessWidget {
                   const SizedBox(height: 24),
                   Builder(builder: (ctx) {
                     final store = UserStoreProvider.of(ctx);
-                    final isAuthor = store.uid.isNotEmpty &&
-                        store.uid == post.authorUid;
+                    final isAuthor =
+                        store.uid.isNotEmpty && store.uid == post.authorUid;
                     if (isAuthor) {
                       return Container(
                         width: double.infinity,
@@ -639,108 +677,121 @@ class _ExchangeDetail extends StatelessWidget {
                       );
                     }
                     return SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: () async {
-                        final userStore = UserStoreProvider.of(context);
-                        final firestore = FirebaseFirestore.instance;
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: () async {
+                          final userStore = UserStoreProvider.of(context);
+                          final firestore = FirebaseFirestore.instance;
 
-                        try {
-                          final String chatId = "${post.id}_${userStore.name}";
+                          try {
+                            final String chatId =
+                                "${post.id}_${userStore.name}";
 
-                          // ── 중복 참여 사전 체크 ──
-                          final existingChat = await firestore
-                              .collection('chatRooms')
-                              .doc(chatId)
-                              .get();
-                          if (existingChat.exists) {
-                            if (!context.mounted) return;
-                            showDialog(
-                              context: context,
-                              builder: (ctx) => AlertDialog(
-                                shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(16)),
-                                content: const Text('이미 참여한 물물교환입니다.',
-                                    style: TextStyle(fontSize: 15)),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(ctx),
-                                    child: const Text('확인',
-                                        style: TextStyle(
-                                            color: AppColors.exchangeColor)),
-                                  ),
-                                ],
-                              ),
+                            // ── 중복 참여 사전 체크 ──
+                            final existingChat = await firestore
+                                .collection('chatRooms')
+                                .doc(chatId)
+                                .get();
+                            if (existingChat.exists) {
+                              if (!context.mounted) return;
+                              showDialog(
+                                context: context,
+                                builder: (ctx) => AlertDialog(
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16)),
+                                  content: const Text('이미 참여한 물물교환입니다.',
+                                      style: TextStyle(fontSize: 15)),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(ctx),
+                                      child: const Text('확인',
+                                          style: TextStyle(
+                                              color: AppColors.exchangeColor)),
+                                    ),
+                                  ],
+                                ),
+                              );
+                              return;
+                            }
+
+                            await firestore.runTransaction((transaction) async {
+                              DocumentReference postRef =
+                                  firestore.collection('posts').doc(post.id);
+
+                              transaction
+                                  .update(postRef, {'status': 'chatting'});
+
+                              DocumentReference chatRef =
+                                  firestore.collection('chatRooms').doc(chatId);
+                              transaction.set(chatRef, {
+                                'id': chatId,
+                                'title': '${post.offerItem} ↔ ${post.wantItem}',
+                                'lastMessage': '${userStore.name}님이 참여하셨습니다.',
+                                'lastMessageTime': FieldValue.serverTimestamp(),
+                                'unreadCount': 0,
+                                'type': 'exchange',
+                                'members': [post.authorUid, userStore.uid],
+                                'avatarEmoji': '🔄',
+                                'authorUid': post.authorUid,
+                                'postId': post.id,
+                                'joinedAt': {
+                                  userStore.uid: FieldValue.serverTimestamp()
+                                },
+                              });
+
+                              DocumentReference msgRef =
+                                  chatRef.collection('messages').doc();
+                              transaction.set(msgRef, {
+                                'text': '${userStore.name}님이 참여하셨습니다.',
+                                'senderName': 'system',
+                                'time': FieldValue.serverTimestamp(),
+                              });
+                            });
+
+                            /// 교환 제안 알림 - 글 작성자한테 알림
+                            await NotificationService.send(
+                              toUid: post.authorUid,
+                              type: 'exchange',
+                              title: '🔄 물물교환 제안이 왔어요',
+                              body:
+                                  '${userStore.name}님이 "${post.offerItem} ↔ ${post.wantItem}"에 채팅을 걸었어요.',
                             );
-                            return;
-                          }
 
-                          await firestore.runTransaction((transaction) async {
-                            DocumentReference postRef =
-                                firestore.collection('posts').doc(post.id);
+                            if (!context.mounted) return;
 
-                            transaction.update(postRef, {'status': 'chatting'});
-
-                            DocumentReference chatRef =
-                                firestore.collection('chatRooms').doc(chatId);
-                            transaction.set(chatRef, {
-                              'id': chatId,
-                              'title': '${post.offerItem} ↔ ${post.wantItem}',
-                              'lastMessage':
-                                  '${userStore.name}님이 참여하셨습니다.',
-                              'lastMessageTime': FieldValue.serverTimestamp(),
-                              'unreadCount': 0,
-                              'type': 'exchange',
-                              'members': [post.authorUid, userStore.uid],
-                              'avatarEmoji': '🔄',
-                              'authorUid': post.authorUid,
-                              'postId': post.id,
-                            });
-
-                            DocumentReference msgRef =
-                                chatRef.collection('messages').doc();
-                            transaction.set(msgRef, {
-                              'text':
-                                  '${userStore.name}님이 참여하셨습니다.',
-                              'senderName': 'system',
-                              'time': FieldValue.serverTimestamp(),
-                            });
-                          });
-
-                          if (!context.mounted) return;
-
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => ChatScreen(
-                                room: ChatRoom(
-                                  id: chatId,
-                                  title: post.offerItem,
-                                  lastMessage: '채팅이 시작되었습니다.',
-                                  lastMessageTime: DateTime.now(),
-                                  unreadCount: 0,
-                                  avatarEmoji: '🔄',
-                                  type: ChatRoomType.exchange,
-                                  members: [post.authorName, userStore.name],
-                                  authorUid: post.authorUid,
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => ChatScreen(
+                                  room: ChatRoom(
+                                    id: chatId,
+                                    title: post.offerItem,
+                                    lastMessage: '채팅이 시작되었습니다.',
+                                    lastMessageTime: DateTime.now(),
+                                    unreadCount: 0,
+                                    avatarEmoji: '🔄',
+                                    type: ChatRoomType.exchange,
+                                    members: [post.authorName, userStore.name],
+                                    authorUid: post.authorUid,
+                                  ),
                                 ),
                               ),
-                            ),
-                          );
-                        } catch (e) {
-                          print('Error: $e');
-                        }
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.exchangeColor,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
+                            );
+                          } catch (e) {
+                            print('Error: $e');
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.exchangeColor,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                        ),
+                        icon: const Icon(Icons.chat_bubble_outline,
+                            color: Colors.white),
+                        label: const Text('채팅으로 교환 제안하기',
+                            style:
+                                TextStyle(fontSize: 15, color: Colors.white)),
                       ),
-                      icon: const Icon(Icons.chat_bubble_outline,
-                          color: Colors.white),
-                      label: const Text('채팅으로 교환 제안하기',
-                          style: TextStyle(fontSize: 15, color: Colors.white)),
-                    ),
-                  );
+                    );
                   }),
                 ],
               ),
@@ -763,14 +814,15 @@ class _CreateExchangeSheetState extends State<_CreateExchangeSheet> {
   final _offerController = TextEditingController();
   final _wantController = TextEditingController();
   final _descController = TextEditingController();
-  File? _selectedFile;
   bool _isUploading = false;
+  final _meetingPlaceController = TextEditingController();
 
   @override
   void dispose() {
     _offerController.dispose();
     _wantController.dispose();
     _descController.dispose();
+    _meetingPlaceController.dispose();
     super.dispose();
   }
 
@@ -786,19 +838,6 @@ class _CreateExchangeSheetState extends State<_CreateExchangeSheet> {
     setState(() => _isUploading = true);
 
     try {
-      String imageUrl = '';
-      if (_selectedFile != null) {
-        try {
-          print("이미지 업로드 중...");
-          imageUrl =
-              await StorageService.uploadPostImage('exchange', _selectedFile!);
-          print("업로드 성공: $imageUrl");
-        } catch (e) {
-          print("이미지 업로드 실패(건너뜀): $e");
-          // 업로드 실패해도 글은 써지도록 imageUrl을 빈 값으로 유지
-        }
-      }
-
       final userStore = UserStoreProvider.of(context);
 
       await FirebaseFirestore.instance.collection('posts').add({
@@ -807,13 +846,30 @@ class _CreateExchangeSheetState extends State<_CreateExchangeSheet> {
         'description': _descController.text.trim(),
         'offerItem': _offerController.text.trim(),
         'wantItem': _wantController.text.trim(),
-        'imageUrl': imageUrl,
         'status': ExchangeStatus.open.name,
         'authorName': userStore.name,
         'authorUid': userStore.uid,
         'createdAt': FieldValue.serverTimestamp(),
         'location': userStore.location,
+        'meetingPlace': _meetingPlaceController.text.trim(),
       });
+
+      // 새 글 알림 ㅡ 같은 동네 사람들한테 알림
+      final usersSnap = await FirebaseFirestore.instance
+          .collection('users')
+          .where('location', isEqualTo: userStore.location)
+          .get();
+      final otherUids = usersSnap.docs
+          .map((d) => d.id)
+          .where((id) => id != userStore.uid)
+          .toList();
+      await NotificationService.sendToMany(
+        toUids: otherUids,
+        type: 'exchange',
+        title: '🔄 새 물물교환 글이 올라왔어요',
+        body:
+            '${userStore.location} • ${_offerController.text.trim()} ↔ ${_wantController.text.trim()}',
+      );
 
       if (mounted) {
         Navigator.of(context).pop();
@@ -872,14 +928,6 @@ class _CreateExchangeSheetState extends State<_CreateExchangeSheet> {
                       controller: _offerController,
                       decoration: InputDecoration(
                           hintText: '예) 신라면 5봉지', prefixText: '📦 ')),
-                  ImagePickerModule(
-                    label: '물건 상태가 잘 보이게 찍어주세요!',
-                    onImageSelected: (file) {
-                      setState(() {
-                        _selectedFile = file;
-                      });
-                    },
-                  ),
                   const SizedBox(height: 16),
                   const Text('원하는 물건',
                       style: TextStyle(
@@ -891,6 +939,23 @@ class _CreateExchangeSheetState extends State<_CreateExchangeSheet> {
                       controller: _wantController,
                       decoration: InputDecoration(
                           hintText: '예) 즉석밥 5개', prefixText: '🙏 ')),
+                  const SizedBox(height: 16),
+                  const Text('거래 희망 장소',
+                      style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textSecondary)),
+                  const SizedBox(height: 4),
+                  const Text('거래하고 싶은 장소를 미리 정해두세요',
+                      style: TextStyle(fontSize: 12, color: AppColors.textHint)),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _meetingPlaceController,
+                    decoration: const InputDecoration(
+                      hintText: '예) 안암역 2번 출구',
+                      prefixIcon: Icon(Icons.place_outlined),
+                    ),
+                  ),
                   const SizedBox(height: 16),
                   const Text('설명 (선택)',
                       style: TextStyle(
@@ -996,7 +1061,8 @@ class _EditExchangeSheetState extends State<_EditExchangeSheet> {
   Widget build(BuildContext context) {
     return Container(
       height: MediaQuery.of(context).size.height * 0.7,
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding:
+          EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       decoration: const BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -1005,7 +1071,8 @@ class _EditExchangeSheetState extends State<_EditExchangeSheet> {
         children: [
           Container(
             margin: const EdgeInsets.only(top: 12),
-            width: 40, height: 4,
+            width: 40,
+            height: 4,
             decoration: BoxDecoration(
                 color: AppColors.divider,
                 borderRadius: BorderRadius.circular(2)),
@@ -1026,26 +1093,36 @@ class _EditExchangeSheetState extends State<_EditExchangeSheet> {
                 children: [
                   const SizedBox(height: 8),
                   const Text('📦 드릴 물건',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600,
+                      style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
                           color: AppColors.textSecondary)),
                   const SizedBox(height: 8),
-                  TextField(controller: _offerController,
+                  TextField(
+                      controller: _offerController,
                       decoration: const InputDecoration(hintText: '예) 라면 5봉지')),
                   const SizedBox(height: 16),
                   const Text('🙏 원하는 물건',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600,
+                      style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
                           color: AppColors.textSecondary)),
                   const SizedBox(height: 8),
-                  TextField(controller: _wantController,
+                  TextField(
+                      controller: _wantController,
                       decoration: const InputDecoration(hintText: '예) 세제')),
                   const SizedBox(height: 16),
                   const Text('설명 (선택)',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600,
+                      style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
                           color: AppColors.textSecondary)),
                   const SizedBox(height: 8),
-                  TextField(controller: _descController, maxLines: 3,
-                      decoration: const InputDecoration(
-                          hintText: '추가 설명을 입력해주세요.')),
+                  TextField(
+                      controller: _descController,
+                      maxLines: 3,
+                      decoration:
+                          const InputDecoration(hintText: '추가 설명을 입력해주세요.')),
                   const SizedBox(height: 24),
                   SizedBox(
                     width: double.infinity,
@@ -1055,11 +1132,12 @@ class _EditExchangeSheetState extends State<_EditExchangeSheet> {
                           backgroundColor: AppColors.exchangeColor,
                           padding: const EdgeInsets.symmetric(vertical: 16)),
                       child: _isSaving
-                          ? const SizedBox(height: 20, width: 20,
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
                               child: CircularProgressIndicator(
                                   color: Colors.white, strokeWidth: 2))
-                          : const Text('수정 완료',
-                              style: TextStyle(fontSize: 16)),
+                          : const Text('수정 완료', style: TextStyle(fontSize: 16)),
                     ),
                   ),
                   const SizedBox(height: 24),

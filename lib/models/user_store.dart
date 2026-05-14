@@ -5,8 +5,10 @@ class UserStore extends ChangeNotifier {
   String _location = '';
   String _uid = '';
   String _gender = '';
-  String _birthDate = ''; // 'YYYY-MM-DD'
+  String _birthDate = '';
   int _points = 0;
+  String _homeAddress = '';
+  double _avgRating = 0.0;         // ← 추가
 
   String get name => _name;
   String get location => _location;
@@ -14,9 +16,10 @@ class UserStore extends ChangeNotifier {
   String get gender => _gender;
   String get birthDate => _birthDate;
   int get points => _points;
+  String get homeAddress => _homeAddress;
+  double get avgRating => _avgRating;             // ← 추가
   bool get isSignedUp => _name.isNotEmpty && _location.isNotEmpty;
 
-  /// 생년월일로부터 나이대 계산 ('twenties' | 'thirties' | 'other')
   String get ageCategory {
     if (_birthDate.isEmpty) return 'other';
     try {
@@ -37,6 +40,8 @@ class UserStore extends ChangeNotifier {
     String gender = '',
     String birthDate = '',
     int points = 0,
+    String homeAddress = '',
+    double avgRating = 0.0,         // ← 추가
   }) {
     _name = name;
     _location = location;
@@ -44,6 +49,8 @@ class UserStore extends ChangeNotifier {
     _gender = gender;
     _birthDate = birthDate;
     _points = points;
+    _homeAddress = homeAddress;
+    _avgRating = avgRating;             // ← 추가
     notifyListeners();
   }
 
@@ -54,6 +61,16 @@ class UserStore extends ChangeNotifier {
 
   void setPoints(int points) {
     _points = points;
+    notifyListeners();
+  }
+
+  void setHomeAddress(String homeAddress) {
+    _homeAddress = homeAddress;
+    notifyListeners();
+  }
+
+  void setAvgRating(double avgRating) {
+    _avgRating = avgRating;
     notifyListeners();
   }
 }

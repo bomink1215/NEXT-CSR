@@ -6,6 +6,8 @@ import '../models/models.dart';
 import '../models/mock_data.dart';
 import '../widgets/common_widgets.dart';
 import './chat_list_screen.dart';
+import '../utils/notification_service.dart';
+import '../utils/location_service.dart';
 
 class GatherScreen extends StatefulWidget {
   const GatherScreen({super.key});
@@ -34,6 +36,7 @@ class _GatherScreenState extends State<GatherScreen> {
       backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('모임 찾기')),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'gatherFab',
         onPressed: () => _showCreateSheet(context),
         backgroundColor: AppColors.gatherColor,
         icon: const Icon(Icons.add, color: Colors.white),
@@ -77,19 +80,21 @@ class _GatherScreenState extends State<GatherScreen> {
                   final data = doc.data() as Map<String, dynamic>;
                   return (data['category'] ?? '기타') == _selectedCategory;
                 }).toList())
-          ..sort((a, b) {
-            final aD = a.data() as Map;
-            final bD = b.data() as Map;
-            final aFull = (aD['currentMembers'] ?? 0) >= (aD['maxMembers'] ?? 1);
-            final bFull = (bD['currentMembers'] ?? 0) >= (bD['maxMembers'] ?? 1);
-            if (!aFull && bFull) return -1;
-            if (aFull && !bFull) return 1;
-            final aIsMe = aD['authorUid'] == uid;
-            final bIsMe = bD['authorUid'] == uid;
-            if (aIsMe && !bIsMe) return -1;
-            if (!aIsMe && bIsMe) return 1;
-            return 0;
-          });
+            ..sort((a, b) {
+              final aD = a.data() as Map;
+              final bD = b.data() as Map;
+              final aFull =
+                  (aD['currentMembers'] ?? 0) >= (aD['maxMembers'] ?? 1);
+              final bFull =
+                  (bD['currentMembers'] ?? 0) >= (bD['maxMembers'] ?? 1);
+              if (!aFull && bFull) return -1;
+              if (aFull && !bFull) return 1;
+              final aIsMe = aD['authorUid'] == uid;
+              final bIsMe = bD['authorUid'] == uid;
+              if (aIsMe && !bIsMe) return -1;
+              if (!aIsMe && bIsMe) return 1;
+              return 0;
+            });
 
           if (allDocs.isEmpty) {
             return const Center(
@@ -106,7 +111,8 @@ class _GatherScreenState extends State<GatherScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text('빠른 모임 찾기',
-                          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                          style: TextStyle(
+                              fontSize: 17, fontWeight: FontWeight.w700)),
                       const SizedBox(height: 10),
                       SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
@@ -135,8 +141,11 @@ class _GatherScreenState extends State<GatherScreen> {
                       ),
                       const SizedBox(height: 32),
                       Text(
-                        _selectedCategory == null ? '지금 모집 중' : '"$_selectedCategory" 모임',
-                        style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                          _selectedCategory == null
+                              ? '지금 모집 중'
+                              : '"$_selectedCategory" 모임',
+                          style: const TextStyle(
+                              fontSize: 17, fontWeight: FontWeight.w700)),
                       const SizedBox(height: 12),
                     ],
                   ),
@@ -148,11 +157,11 @@ class _GatherScreenState extends State<GatherScreen> {
                   hasScrollBody: false,
                   child: Center(
                       child: Text(
-                        _selectedCategory == null
-                            ? '주변에 열린 모임이 없어요.\n첫 모임을 만들어보세요! 👥'
-                            : '"$_selectedCategory" 카테고리의 모임이 없어요.',
-                        textAlign: TextAlign.center,
-                      )),
+                    _selectedCategory == null
+                        ? '주변에 열린 모임이 없어요.\n첫 모임을 만들어보세요! 👥'
+                        : '"$_selectedCategory" 카테고리의 모임이 없어요.',
+                    textAlign: TextAlign.center,
+                  )),
                 )
               else
                 // 3. 실시간 게시글 목록 (ListView.separated와 유사한 SliverList)
@@ -201,7 +210,8 @@ class _QuickCategory extends StatelessWidget {
   final bool isSelected;
   final VoidCallback onTap;
 
-  const _QuickCategory(this.emoji, this.label, {required this.isSelected, required this.onTap});
+  const _QuickCategory(this.emoji, this.label,
+      {required this.isSelected, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -231,9 +241,8 @@ class _QuickCategory extends StatelessWidget {
                     color: isSelected
                         ? AppColors.gatherColor
                         : AppColors.textSecondary,
-                    fontWeight: isSelected
-                        ? FontWeight.w700
-                        : FontWeight.w500)),
+                    fontWeight:
+                        isSelected ? FontWeight.w700 : FontWeight.w500)),
           ],
         ),
       ),
@@ -241,32 +250,47 @@ class _QuickCategory extends StatelessWidget {
   }
 }
 
-class _GatherCard extends StatelessWidget {
+class _GatherCard extends StatefulWidget {
   final GatherPost post;
-
   const _GatherCard({required this.post});
+
+  @override
+  State<_GatherCard> createState() => _GatherCardState();
+}
+
+class _GatherCardState extends State<_GatherCard> {
+  int? _walkMinutes;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _calcWalkMinutes();
+  }
+
+  Future<void> _calcWalkMinutes() async {
+    final store = UserStoreProvider.of(context);
+    if (store.homeAddress.isEmpty || widget.post.place.isEmpty) return;
+    final minutes = await LocationService.getWalkMinutesBetween(
+      store.homeAddress,
+      widget.post.place,
+    );
+    if (mounted) setState(() => _walkMinutes = minutes);
+  }
 
   String _genderLabel(GenderFilter f) {
     switch (f) {
-      case GenderFilter.any:
-        return '성별 무관';
-      case GenderFilter.maleOnly:
-        return '남성만';
-      case GenderFilter.femaleOnly:
-        return '여성만';
+      case GenderFilter.any: return '성별 무관';
+      case GenderFilter.maleOnly: return '남성만';
+      case GenderFilter.femaleOnly: return '여성만';
     }
   }
 
   String _ageLabel(AgeFilter f) {
     switch (f) {
-      case AgeFilter.any:
-        return '연령 무관';
-      case AgeFilter.twenties:
-        return '20대';
-      case AgeFilter.thirties:
-        return '30대';
-      case AgeFilter.mixed:
-        return '혼합';
+      case AgeFilter.any: return '연령 무관';
+      case AgeFilter.twenties: return '20대';
+      case AgeFilter.thirties: return '30대';
+      case AgeFilter.mixed: return '혼합';
     }
   }
 
@@ -279,7 +303,7 @@ class _GatherCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final store = UserStoreProvider.of(context);
-    final isAuthor = store.uid.isNotEmpty && store.uid == post.authorUid;
+    final isAuthor = store.uid.isNotEmpty && store.uid == widget.post.authorUid;
 
     return GestureDetector(
       onTap: () => _showDetail(context),
@@ -288,34 +312,34 @@ class _GatherCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: isAuthor
               ? AppColors.gatherColor.withOpacity(0.07)
-              : post.isFull
+              : widget.post.isFull
                   ? AppColors.textHint.withOpacity(0.07)
                   : AppColors.surface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isAuthor
                 ? AppColors.gatherColor.withOpacity(0.5)
-                : post.isFull
+                : widget.post.isFull
                     ? AppColors.textHint.withOpacity(0.25)
                     : AppColors.gatherColor.withOpacity(0.3),
-            width: (isAuthor || !post.isFull) ? 1.5 : 1,
+            width: (isAuthor || !widget.post.isFull) ? 1.5 : 1,
           ),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 이모지
             Container(
               width: 54,
               height: 54,
               decoration: BoxDecoration(
-                color: post.isFull
+                color: widget.post.isFull
                     ? AppColors.cardBg
                     : AppColors.gatherColor.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(14),
               ),
               child: Center(
-                child: Text(post.emoji, style: const TextStyle(fontSize: 28)),
+                child: Text(widget.post.emoji,
+                    style: const TextStyle(fontSize: 28)),
               ),
             ),
             const SizedBox(width: 14),
@@ -327,7 +351,7 @@ class _GatherCard extends StatelessWidget {
                     children: [
                       Expanded(
                         child: Text(
-                          post.title,
+                          widget.post.title,
                           style: const TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w700,
@@ -335,13 +359,23 @@ class _GatherCard extends StatelessWidget {
                           ),
                         ),
                       ),
-                      if (post.isFull)
+                      if (widget.post.isFull)
                         const TagBadge(label: '마감', color: AppColors.error),
+                      if (_walkMinutes != null)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 6),
+                          child: WalkBadge(minutes: _walkMinutes!),
+                        )
+                      else if (widget.post.place.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 6),
+                          child: const WalkBadge(minutes: 5),
+                        ),
                     ],
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    post.description,
+                    widget.post.description,
                     style: const TextStyle(
                         fontSize: 13,
                         color: AppColors.textSecondary,
@@ -357,7 +391,7 @@ class _GatherCard extends StatelessWidget {
                       const SizedBox(width: 2),
                       Expanded(
                         child: Text(
-                          post.place,
+                          widget.post.place,
                           style: const TextStyle(
                               fontSize: 11, color: AppColors.textHint),
                           overflow: TextOverflow.ellipsis,
@@ -371,17 +405,18 @@ class _GatherCard extends StatelessWidget {
                     runSpacing: 4,
                     children: [
                       TagBadge(
-                          label: _dateLabel(post.meetTime),
+                          label: _dateLabel(widget.post.meetTime),
                           color: AppColors.gatherColor),
                       TagBadge(
-                          label: _genderLabel(post.genderFilter),
+                          label: _genderLabel(widget.post.genderFilter),
                           color: AppColors.textSecondary),
                       TagBadge(
-                          label: _ageLabel(post.ageFilter),
+                          label: _ageLabel(widget.post.ageFilter),
                           color: AppColors.textSecondary),
                       TagBadge(
-                        label: '${post.currentMembers}/${post.maxMembers}명',
-                        color: post.isFull
+                        label:
+                            '${widget.post.currentMembers}/${widget.post.maxMembers}명',
+                        color: widget.post.isFull
                             ? AppColors.error
                             : AppColors.gatherColor,
                       ),
@@ -435,7 +470,7 @@ class _GatherCard extends StatelessWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _GatherDetail(post: post),
+      builder: (_) => _GatherDetail(post: widget.post),
     );
   }
 
@@ -444,7 +479,7 @@ class _GatherCard extends StatelessWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _EditGatherSheet(post: post),
+      builder: (_) => _EditGatherSheet(post: widget.post),
     );
   }
 
@@ -472,7 +507,7 @@ class _GatherCard extends StatelessWidget {
     try {
       await FirebaseFirestore.instance
           .collection('posts')
-          .doc(post.id)
+          .doc(widget.post.id)
           .delete();
       if (context.mounted)
         ScaffoldMessenger.of(context).showSnackBar(
@@ -531,8 +566,7 @@ class _GatherDetail extends StatelessWidget {
     final firestore = FirebaseFirestore.instance;
 
     // ── 중복 참여 사전 체크 ──
-    final postSnap =
-        await firestore.collection('posts').doc(post.id).get();
+    final postSnap = await firestore.collection('posts').doc(post.id).get();
     if (postSnap.exists) {
       final existingMembers =
           List<dynamic>.from(postSnap.data()?['members'] ?? []);
@@ -541,10 +575,10 @@ class _GatherDetail extends StatelessWidget {
         showDialog(
           context: context,
           builder: (ctx) => AlertDialog(
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16)),
-            content: const Text('이미 참여 중인 모임입니다.',
-                style: TextStyle(fontSize: 15)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            content:
+                const Text('이미 참여 중인 모임입니다.', style: TextStyle(fontSize: 15)),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
@@ -590,6 +624,7 @@ class _GatherDetail extends StatelessWidget {
               'avatarEmoji': post.emoji,
               'authorUid': post.authorUid,
               'unreadCount': 0,
+              'joinedAt': {userStore.uid: FieldValue.serverTimestamp()},
             },
             SetOptions(merge: true));
 
@@ -604,6 +639,14 @@ class _GatherDetail extends StatelessWidget {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('🎉 참여 완료! 채팅방으로 이동합니다.')));
+
+        // 모임 참여 알림 ㅡ 글 작성자한테 알림
+        await NotificationService.send(
+          toUid: post.authorUid,
+          type: 'gather',
+          title: '👥 모임에 새 참여자가 왔어요',
+          body: '${userStore.name}님이 "${post.title}"에 참여했어요.',
+        );
 
         Navigator.push(
             context,
@@ -715,8 +758,8 @@ class _GatherDetail extends StatelessWidget {
                   const Spacer(),
                   Builder(builder: (ctx) {
                     final store = UserStoreProvider.of(ctx);
-                    final isAuthor = store.uid.isNotEmpty &&
-                        store.uid == post.authorUid;
+                    final isAuthor =
+                        store.uid.isNotEmpty && store.uid == post.authorUid;
                     // 내가 만든 모임
                     if (isAuthor) {
                       return Container(
@@ -762,7 +805,8 @@ class _GatherDetail extends StatelessWidget {
                         ),
                         icon: const Icon(Icons.group_add, color: Colors.white),
                         label: const Text('모임 참여하기',
-                            style: TextStyle(fontSize: 15, color: Colors.white)),
+                            style:
+                                TextStyle(fontSize: 15, color: Colors.white)),
                       ),
                     );
                   }),
@@ -808,8 +852,7 @@ class _CreateGatherSheetState extends State<_CreateGatherSheet> {
 
   String _selectedEmoji = '👥';
   String _selectedCategory = '기타';
-  DateTime _selectedDateTime =
-      DateTime.now().add(const Duration(hours: 1));
+  DateTime _selectedDateTime = DateTime.now().add(const Duration(hours: 1));
 
   bool _isUploading = false;
 
@@ -828,8 +871,8 @@ class _CreateGatherSheetState extends State<_CreateGatherSheet> {
           hour: _selectedDateTime.hour, minute: _selectedDateTime.minute),
     );
     if (time == null || !mounted) return;
-    setState(() => _selectedDateTime = DateTime(
-        date.year, date.month, date.day, time.hour, time.minute));
+    setState(() => _selectedDateTime =
+        DateTime(date.year, date.month, date.day, time.hour, time.minute));
   }
 
   Future<void> _submitGathering() async {
@@ -886,6 +929,22 @@ class _CreateGatherSheetState extends State<_CreateGatherSheet> {
 
       if (mounted) {
         Navigator.of(context).pop();
+
+        // 새 글 알림 ㅡ 같은 동네 사람들한테 새 글 알림
+        final usersSnap = await FirebaseFirestore.instance
+            .collection('users')
+            .where('location', isEqualTo: userStore.location)
+            .get();
+        final otherUids = usersSnap.docs
+            .map((d) => d.id)
+            .where((id) => id != userStore.uid)
+            .toList();
+        await NotificationService.sendToMany(
+          toUids: otherUids,
+          type: 'gather',
+          title: '👥 새 모임이 생겼어요',
+          body: '${userStore.location} • ${_titleController.text.trim()}',
+        );
 
         Navigator.push(
           context,
@@ -963,12 +1022,17 @@ class _CreateGatherSheetState extends State<_CreateGatherSheet> {
                           _selectedEmoji = c['emoji']!;
                         }),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 7),
                           decoration: BoxDecoration(
-                            color: isSelected ? AppColors.gatherColor : AppColors.surface,
+                            color: isSelected
+                                ? AppColors.gatherColor
+                                : AppColors.surface,
                             borderRadius: BorderRadius.circular(20),
                             border: Border.all(
-                              color: isSelected ? AppColors.gatherColor : AppColors.divider,
+                              color: isSelected
+                                  ? AppColors.gatherColor
+                                  : AppColors.divider,
                             ),
                           ),
                           child: Text(
@@ -976,7 +1040,9 @@ class _CreateGatherSheetState extends State<_CreateGatherSheet> {
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
-                              color: isSelected ? Colors.white : AppColors.textSecondary,
+                              color: isSelected
+                                  ? Colors.white
+                                  : AppColors.textSecondary,
                             ),
                           ),
                         ),
@@ -1254,8 +1320,8 @@ class _EditGatherSheetState extends State<_EditGatherSheet> {
   Widget build(BuildContext context) {
     return Container(
       height: MediaQuery.of(context).size.height * 0.75,
-      padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding:
+          EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       decoration: const BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -1264,7 +1330,8 @@ class _EditGatherSheetState extends State<_EditGatherSheet> {
         children: [
           Container(
             margin: const EdgeInsets.only(top: 12),
-            width: 40, height: 4,
+            width: 40,
+            height: 4,
             decoration: BoxDecoration(
                 color: AppColors.divider,
                 borderRadius: BorderRadius.circular(2)),
@@ -1285,30 +1352,41 @@ class _EditGatherSheetState extends State<_EditGatherSheet> {
                 children: [
                   const SizedBox(height: 8),
                   const Text('모임 제목',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600,
+                      style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
                           color: AppColors.textSecondary)),
                   const SizedBox(height: 8),
-                  TextField(controller: _titleController,
+                  TextField(
+                      controller: _titleController,
                       decoration: const InputDecoration(hintText: '모임 제목')),
                   const SizedBox(height: 16),
                   const Text('설명',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600,
+                      style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
                           color: AppColors.textSecondary)),
                   const SizedBox(height: 8),
-                  TextField(controller: _descController, maxLines: 3,
+                  TextField(
+                      controller: _descController,
+                      maxLines: 3,
                       decoration: const InputDecoration(hintText: '모임 설명')),
                   const SizedBox(height: 16),
                   const Text('장소',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600,
+                      style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
                           color: AppColors.textSecondary)),
                   const SizedBox(height: 8),
-                  TextField(controller: _placeController,
+                  TextField(
+                      controller: _placeController,
                       decoration: const InputDecoration(hintText: '만날 장소')),
                   const SizedBox(height: 16),
                   Row(
                     children: [
                       const Text('최대 인원',
-                          style: TextStyle(fontSize: 14,
+                          style: TextStyle(
+                              fontSize: 14,
                               fontWeight: FontWeight.w600,
                               color: AppColors.textSecondary)),
                       const Spacer(),
@@ -1340,11 +1418,12 @@ class _EditGatherSheetState extends State<_EditGatherSheet> {
                           backgroundColor: AppColors.gatherColor,
                           padding: const EdgeInsets.symmetric(vertical: 16)),
                       child: _isSaving
-                          ? const SizedBox(height: 20, width: 20,
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
                               child: CircularProgressIndicator(
                                   color: Colors.white, strokeWidth: 2))
-                          : const Text('수정 완료',
-                              style: TextStyle(fontSize: 16)),
+                          : const Text('수정 완료', style: TextStyle(fontSize: 16)),
                     ),
                   ),
                   const SizedBox(height: 24),

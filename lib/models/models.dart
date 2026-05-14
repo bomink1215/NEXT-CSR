@@ -16,6 +16,8 @@ class GroupBuyPost {
   final String authorUid;
   final DateTime createdAt;
   final bool isDelivery;
+  final DateTime? deadline;
+  final String meetingPlace;
 
   GroupBuyPost({
     required this.id,
@@ -32,6 +34,8 @@ class GroupBuyPost {
     this.authorUid = '',
     required this.createdAt,
     required this.isDelivery,
+    this.meetingPlace = '',
+    this.deadline,
   });
 
   bool get isFull => currentParticipants >= maxParticipants;
@@ -52,6 +56,7 @@ class ExchangePost {
   final int walkMinutes;
   final DateTime createdAt;
   final ExchangeStatus status;
+  final String meetingPlace;
 
   ExchangePost({
     required this.id,
@@ -66,6 +71,7 @@ class ExchangePost {
     required this.walkMinutes,
     required this.createdAt,
     required this.status,
+    this.meetingPlace = '',
   });
   factory ExchangePost.fromMap(Map<String, dynamic> data, String documentId) {
     return ExchangePost(
@@ -84,6 +90,7 @@ class ExchangePost {
         (e) => e.name == (data['status'] ?? 'open'),
         orElse: () => ExchangeStatus.open,
       ),
+      meetingPlace: data['meetingPlace'] ?? '',
     );
   }
 
@@ -99,6 +106,7 @@ class ExchangePost {
       'walkMinutes': walkMinutes,
       'createdAt': FieldValue.serverTimestamp(),
       'status': status.name,
+      'meetingPlace': meetingPlace,
     };
   }
 }
@@ -226,6 +234,8 @@ class ChatRoom {
   final ChatRoomType type;
   final List<String> members;
   final String authorUid;
+  final Map<String, DateTime> lastRead;
+  final Map<String, DateTime> joinedAt;
 
   ChatRoom({
     required this.id,
@@ -237,9 +247,21 @@ class ChatRoom {
     required this.type,
     required this.members,
     this.authorUid = '',
+    this.lastRead = const {},
+    this.joinedAt = const {},
   });
 
   factory ChatRoom.fromMap(Map<String, dynamic> data, String documentId) {
+    final rawLastRead = data['lastRead'] as Map<String, dynamic>? ?? {};
+    final lastReadMap = rawLastRead.map(
+      (k, v) => MapEntry(k, (v as Timestamp).toDate()),
+    );
+
+    final rawJoinedAt = data['joinedAt'] as Map<String, dynamic>? ?? {};
+    final joinedAtMap = rawJoinedAt.map(
+      (k, v) => MapEntry(k, (v as Timestamp).toDate()),
+    );
+
     return ChatRoom(
       id: documentId,
       title: data['title'] ?? '이름 없는 채팅방',
@@ -254,6 +276,8 @@ class ChatRoom {
       ),
       members: List<String>.from(data['members'] ?? []),
       authorUid: data['authorUid'] ?? '',
+      lastRead: lastReadMap,
+      joinedAt: joinedAtMap,
     );
   }
 }

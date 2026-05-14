@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../theme/app_theme.dart';
-import '../models/mock_data.dart';
 import '../models/user_store.dart';
 import '../widgets/common_widgets.dart';
 import 'group_buy_screen.dart';
@@ -11,6 +10,7 @@ import 'gather_screen.dart';
 import 'chat_list_screen.dart';
 import 'notification_screen.dart';
 import 'signup_screen.dart';
+import 'mypage_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -403,6 +403,16 @@ class _HomeTab extends StatelessWidget {
                       tooltip: '테스트 데이터 초기화 (개발용)',
                     ),
                     IconButton(
+                      icon: const Icon(Icons.person_outline),
+                      onPressed: () {
+                        Navigator.of(context, rootNavigator: true).push(
+                          MaterialPageRoute(builder: (_) => const MyPageScreen()),
+                        );
+                      },
+                      color: AppColors.textSecondary,
+                      tooltip: '마이페이지',
+                    ),
+                    IconButton(
                       icon: const Icon(Icons.logout),
                       onPressed: () {
                         Navigator.of(context, rootNavigator: true)
@@ -516,20 +526,21 @@ class _PointBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final store = UserStoreProvider.of(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.25),
         borderRadius: BorderRadius.circular(20),
       ),
-      child: const Row(
+      child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.monetization_on, size: 14, color: Colors.white),
-          SizedBox(width: 4),
+          const Icon(Icons.monetization_on, size: 14, color: Colors.white),
+          const SizedBox(width: 4),
           Text(
-            '보유 포인트: 120P',
-            style: TextStyle(
+            '보유 포인트: ${store.points}P',
+            style: const TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w700,
               color: Colors.white,
@@ -608,81 +619,133 @@ class _RecentGroupBuy extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final posts = MockData.groupBuyPosts.where((p) => !p.isFull).take(3).toList();
+    final now = DateTime.now();
     return SizedBox(
       height: 160,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        itemCount: posts.length,
-        itemBuilder: (context, i) {
-          final p = posts[i];
-          return GestureDetector(
-            onTap: () => Navigator.of(context, rootNavigator: true).push(
-              MaterialPageRoute(builder: (_) => const GroupBuyScreen()),
-            ),
-            child: Container(
-              width: 220,
-              margin: const EdgeInsets.only(right: 12),
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: AppColors.divider),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      TagBadge(label: p.category, color: AppColors.buyColor),
-                      const SizedBox(width: 6),
-                      WalkBadge(minutes: p.walkMinutes),
-                    ],
+      child: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('posts')
+            .where('type', isEqualTo: 'groupBuy')
+            .where('isFull', isEqualTo: false)
+            .limit(10)
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData)
+            return const Center(child: CircularProgressIndicator());
+
+          var docs = snapshot.data!.docs;
+
+          // 마감기한 지난 글 제거
+          docs = docs.where((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            final deadline = (data['deadline'] as Timestamp?)?.toDate();
+            if (deadline == null) return true;
+            return deadline.isAfter(now);
+          }).toList();
+
+          // 정렬: 1순위 1자리 남은 것, 2순위 오래된 순
+          docs.sort((a, b) {
+            final aD = a.data() as Map<String, dynamic>;
+            final bD = b.data() as Map<String, dynamic>;
+            final aCurrent = aD['currentParticipants'] ?? 0;
+            final aMax = aD['maxParticipants'] ?? 1;
+            final bCurrent = bD['currentParticipants'] ?? 0;
+            final bMax = bD['maxParticipants'] ?? 1;
+            final aOnLeft = aMax - aCurrent == 1;
+            final bOnLeft = bMax - bCurrent == 1;
+            if (aOnLeft && !bOnLeft) return -1;
+            if (!aOnLeft && bOnLeft) return 1;
+            final aTime = (aD['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now();
+            final bTime = (bD['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now();
+            return aTime.compareTo(bTime);
+          });
+
+          final topDocs = docs.take(5).toList();
+
+          if (topDocs.isEmpty) {
+            return const Center(
+              child: Text('마감 임박 공동구매가 없어요',
+                  style: TextStyle(color: AppColors.textSecondary)),
+            );
+          }
+
+          return ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            itemCount: topDocs.length,
+            itemBuilder: (context, i) {
+              final data = topDocs[i].data() as Map<String, dynamic>;
+              return GestureDetector(
+                onTap: () => Navigator.of(context, rootNavigator: true).push(
+                  MaterialPageRoute(builder: (_) => const GroupBuyScreen()),
+                ),
+                child: Container(
+                  width: 220,
+                  margin: const EdgeInsets.only(right: 12),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppColors.divider),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    p.title,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const Spacer(),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      Row(
+                        children: [
+                          TagBadge(
+                              label: data['category'] ?? '기타',
+                              color: AppColors.buyColor),
+                          const SizedBox(width: 6),
+                          const WalkBadge(minutes: 5),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
                       Text(
-                        '1인 ${_formatPrice(p.unitPrice)}원',
+                        data['title'] ?? '',
                         style: const TextStyle(
                           fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.primary,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
                         ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      Text(
-                        '${p.currentParticipants}/${p.maxParticipants}명',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textSecondary,
-                        ),
+                      const Spacer(),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            '1인 ${_formatPrice(data['unitPrice'] ?? 0)}원',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                          Text(
+                            '${data['currentParticipants']}/${data['maxParticipants']}명',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ],
-              ),
-            ),
+                ),
+              );
+            },
           );
         },
       ),
     );
   }
 
-  String _formatPrice(int price) =>
-      price.toString().replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+$)'), (m) => '${m[1]},');
+  String _formatPrice(int price) => price
+      .toString()
+      .replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+$)'), (m) => '${m[1]},');
 }
 
 // ─── 오늘의 모임 ──────────────────────────────────────────────────
@@ -691,82 +754,134 @@ class _TodayGather extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final posts = MockData.gatherPosts.where((p) => !p.isFull).take(2).toList();
+    final now = DateTime.now();
+    final endOfDay = DateTime(now.year, now.month, now.day, 23, 59, 59);
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Column(
-        children: posts.map((p) {
-          final remaining = p.meetTime.difference(DateTime.now());
-          final label = remaining.inHours > 0
-              ? '${remaining.inHours}시간 후'
-              : '${remaining.inMinutes}분 후';
-          return GestureDetector(
-            onTap: () => Navigator.of(context, rootNavigator: true).push(
-              MaterialPageRoute(builder: (_) => const GatherScreen()),
-            ),
-            child: Container(
-              margin: const EdgeInsets.only(bottom: 10),
-              padding: const EdgeInsets.all(14),
+      child: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('posts')
+            .where('type', isEqualTo: 'gathering')
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData)
+            return const Center(child: CircularProgressIndicator());
+
+          // 마감된 모임 제외 + 정렬
+          final docs = snapshot.data!.docs.where((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            final meetTime = (data['meetTime'] as Timestamp).toDate();
+            final current = data['currentMembers'] ?? 0;
+            final max = data['maxMembers'] ?? 1;
+            return meetTime.isAfter(now) &&
+                meetTime.isBefore(endOfDay) &&
+                current < max;
+          }).toList()
+            ..sort((a, b) {
+              final aTime = ((a.data() as Map)['meetTime'] as Timestamp).toDate();
+              final bTime = ((b.data() as Map)['meetTime'] as Timestamp).toDate();
+              return aTime.compareTo(bTime);
+            });
+
+          if (docs.isEmpty) {
+            return Container(
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: AppColors.surface,
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                    color: AppColors.gatherColor.withOpacity(0.3)),
+                border: Border.all(color: AppColors.gatherColor.withOpacity(0.3)),
               ),
-              child: Row(
-                children: [
-                  Text(p.emoji, style: const TextStyle(fontSize: 28)),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          p.title,
-                          style: const TextStyle(
-                              fontSize: 14, fontWeight: FontWeight.w600),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '📍 ${p.place}',
-                          style: const TextStyle(
-                              fontSize: 12, color: AppColors.textSecondary),
-                        ),
-                      ],
-                    ),
+              child: const Center(
+                child: Text('오늘 예정된 모임이 없어요',
+                    style: TextStyle(color: AppColors.textSecondary)),
+              ),
+            );
+          }
+
+          return Column(
+            children: docs.map((doc) {
+              final data = doc.data() as Map<String, dynamic>;
+              final meetTime = (data['meetTime'] as Timestamp).toDate();
+              final remaining = meetTime.difference(DateTime.now());
+              final label = remaining.inHours > 0
+                  ? '${remaining.inHours}시간 후'
+                  : remaining.inMinutes > 0
+                      ? '${remaining.inMinutes}분 후'
+                      : '진행 중';
+
+              return GestureDetector(
+                onTap: () => Navigator.of(context, rootNavigator: true).push(
+                  MaterialPageRoute(builder: (_) => const GatherScreen()),
+                ),
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                        color: AppColors.gatherColor.withOpacity(0.3)),
                   ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
+                  child: Row(
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: AppColors.gatherColor.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          label,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.gatherColor,
-                          ),
+                      Text(data['emoji'] ?? '👥',
+                          style: const TextStyle(fontSize: 28)),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              data['title'] ?? '',
+                              style: const TextStyle(
+                                  fontSize: 14, fontWeight: FontWeight.w600),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '📍 ${data['place'] ?? ''}',
+                              style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.textSecondary),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${p.currentMembers}/${p.maxMembers}명',
-                        style: const TextStyle(
-                            fontSize: 12, color: AppColors.textSecondary),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: AppColors.gatherColor.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              label,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.gatherColor,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${data['currentMembers']}/${data['maxMembers']}명',
+                            style: const TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textSecondary),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ],
-              ),
-            ),
+                ),
+              );
+            }).toList(),
           );
-        }).toList(),
+        },
       ),
     );
   }

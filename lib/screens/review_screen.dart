@@ -458,18 +458,6 @@ class _ReviewCard extends StatelessWidget {
                                 color: AppColors.reviewColor,
                                 fontWeight: FontWeight.w600)),
                       ),
-                      TextButton(
-                        onPressed: () => _deleteReview(context),
-                        style: TextButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 8),
-                            minimumSize: Size.zero,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-                        child: const Text('삭제',
-                            style: TextStyle(
-                                fontSize: 13,
-                                color: AppColors.error,
-                                fontWeight: FontWeight.w600)),
-                      ),
                     ],
                   )
                 else if (!review.isUnlocked)

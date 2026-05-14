@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../models/models.dart';
-import '../models/mock_data.dart';
 import '../models/user_store.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../utils/notification_service.dart';
 
 class ChatListScreen extends StatefulWidget {
   const ChatListScreen({super.key});
@@ -29,7 +29,6 @@ class _ChatListScreenState extends State<ChatListScreen> {
       appBar: AppBar(title: const Text('채팅')),
       body: Column(
         children: [
-          // 필터 탭
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
             child: Row(
@@ -53,8 +52,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
                   onTap: () => setState(() => _selectedFilter = f['label']!),
                   child: Container(
                     margin: const EdgeInsets.only(right: 8),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 7),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                     decoration: BoxDecoration(
                       color: isSelected ? chipColor : AppColors.surface,
                       borderRadius: BorderRadius.circular(20),
@@ -67,9 +66,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
-                        color: isSelected
-                            ? Colors.white
-                            : AppColors.textSecondary,
+                        color:
+                            isSelected ? Colors.white : AppColors.textSecondary,
                       ),
                     ),
                   ),
@@ -104,8 +102,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Text('💬',
-                            style: TextStyle(fontSize: 40)),
+                        const Text('💬', style: TextStyle(fontSize: 40)),
                         const SizedBox(height: 12),
                         Text(
                           _selectedFilter == '전체'
@@ -123,8 +120,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
 
                 return ListView.separated(
                   itemCount: rooms.length,
-                  separatorBuilder: (_, __) =>
-                      const Divider(indent: 80),
+                  separatorBuilder: (_, __) => const Divider(indent: 80),
                   itemBuilder: (context, i) {
                     final doc = rooms[i];
                     final room = ChatRoom.fromMap(
@@ -230,25 +226,6 @@ class _ChatRoomTile extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          if (room.unreadCount > 0)
-            Container(
-              margin: const EdgeInsets.only(left: 8, top: 4),
-              width: 20,
-              height: 20,
-              decoration: const BoxDecoration(
-                color: AppColors.primary,
-                shape: BoxShape.circle,
-              ),
-              child: Center(
-                child: Text(
-                  '${room.unreadCount}',
-                  style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white),
-                ),
-              ),
-            ),
         ],
       ),
     );
@@ -262,7 +239,7 @@ class _ChatRoomTile extends StatelessWidget {
   }
 }
 
-// ─── 채팅 화면 ────────────────────────────────────────────────────
+// ─── 채팅 화면 ─────────────────────────────────────────────────────
 class ChatScreen extends StatefulWidget {
   final ChatRoom room;
 
@@ -274,25 +251,45 @@ class ChatScreen extends StatefulWidget {
 
 class ChatScreenState extends State<ChatScreen> {
   final TextEditingController _ctrl = TextEditingController();
-  final List<_Message> _messages = [];
+  ChatRoom? _liveRoom; // 실시간 room (lastRead 반영)
+  bool _markedAsRead = false;
 
   @override
   void initState() {
     super.initState();
-    // 초기 시스템 메시지
-    _messages.addAll([
-      _Message(
-        text: '채팅방에 입장하셨습니다.\n📍 ${_getPlaceHint()} 에서 만나요!',
-        isMe: false,
-        isSystem: true,
-        time: DateTime.now().subtract(const Duration(minutes: 5)),
-      ),
-      _Message(
-        text: widget.room.lastMessage,
-        isMe: false,
-        time: DateTime.now().subtract(const Duration(minutes: 3)),
-      ),
-    ]);
+    // chatRoom 실시간 구독 → lastRead 변화 감지
+    FirebaseFirestore.instance
+        .collection('chatRooms')
+        .doc(widget.room.id)
+        .snapshots()
+        .listen((snap) {
+      if (snap.exists && mounted) {
+        setState(() {
+          _liveRoom =
+              ChatRoom.fromMap(snap.data() as Map<String, dynamic>, snap.id);
+        });
+      }
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_markedAsRead) {
+      _markedAsRead = true;
+      _markAsRead();
+    }
+  }
+
+  Future<void> _markAsRead() async {
+    final uid = UserStoreProvider.of(context).uid;
+    if (uid.isEmpty) return;
+    await FirebaseFirestore.instance
+        .collection('chatRooms')
+        .doc(widget.room.id)
+        .set({
+      'lastRead': {uid: FieldValue.serverTimestamp()},
+    }, SetOptions(merge: true));
   }
 
   String _getPlaceHint() {
@@ -310,10 +307,10 @@ class ChatScreenState extends State<ChatScreen> {
     final confirm = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            title: const Text('채팅방 종료'),
-            content: const Text('채팅방이 삭제됩니다. 완료하시겠습니까?'),
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16)),
+            title: const Text('완료'),
+            content: const Text('완료 처리하시겠습니까?'),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
@@ -324,7 +321,7 @@ class ChatScreenState extends State<ChatScreen> {
                 onPressed: () => Navigator.pop(ctx, true),
                 style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary),
-                child: const Text('예'),
+                child: const Text('완료'),
               ),
             ],
           ),
@@ -334,28 +331,115 @@ class ChatScreenState extends State<ChatScreen> {
     if (!confirm) return;
 
     try {
+      final store = UserStoreProvider.of(context);
       final firestore = FirebaseFirestore.instance;
-      // 물물교환 채팅방이면 해당 게시글을 마감(done) 처리
-      if (widget.room.type == ChatRoomType.exchange) {
-        final chatDoc = await firestore
-            .collection('chatRooms')
-            .doc(widget.room.id)
-            .get();
+
+      if (widget.room.type == ChatRoomType.groupBuy) {
+        // 공동구매 완료 처리
+        final ratingDeadline = DateTime.now().add(const Duration(hours: 24));
+        await firestore.collection('posts').doc(widget.room.id).update({
+          'status': 'completed',
+          'completedAt': FieldValue.serverTimestamp(),
+          'ratingDeadline': Timestamp.fromDate(ratingDeadline),
+          'ratings': {},
+          'ratingCompleted': false,
+        });
+
+        // 참여자들에게 별점 요청 알림 (총대 제외)
+        final members = widget.room.members
+            .where((uid) => uid != store.uid)
+            .toList();
+        await NotificationService.sendToMany(
+          toUids: members,
+          type: 'groupBuy',
+          title: '⭐ 총대를 평가해주세요!',
+          body: '"${widget.room.title}" 공동구매가 완료됐어요. 24시간 내에 별점을 남겨주세요.',
+          postId: widget.room.id,
+        );
+      } else if (widget.room.type == ChatRoomType.exchange) {
+        final chatDoc =
+            await firestore.collection('chatRooms').doc(widget.room.id).get();
         final postId = chatDoc.data()?['postId'] as String?;
         if (postId != null && postId.isNotEmpty) {
-          await firestore
-              .collection('posts')
-              .doc(postId)
-              .update({'status': 'done'});
+          await firestore.collection('posts').doc(postId).update({
+            'status': 'done',
+          });
         }
       }
+
       await firestore.collection('chatRooms').doc(widget.room.id).delete();
       if (context.mounted) Navigator.pop(context);
     } catch (e) {
-      if (context.mounted) {
+      if (context.mounted)
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text('오류: $e')));
+    }
+  }
+
+  Future<void> _confirmCancel(BuildContext context) async {
+    final confirm = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Text('거래 파기'),
+            content:
+                const Text('거래를 파기하시겠습니까?\n채팅방이 삭제되고 글이 다시 교환 가능 상태로 돌아갑니다.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('아니요',
+                    style: TextStyle(color: AppColors.textSecondary)),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                style:
+                    ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+                child: const Text('파기', style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+
+    if (!confirm) return;
+
+    try {
+      final store = UserStoreProvider.of(context);
+      final firestore = FirebaseFirestore.instance;
+
+      final chatDoc =
+          await firestore.collection('chatRooms').doc(widget.room.id).get();
+      final members = List<String>.from(
+          (chatDoc.data() as Map<String, dynamic>)['members'] ?? []);
+      final otherUid =
+          members.firstWhere((uid) => uid != store.uid, orElse: () => '');
+
+      final postId =
+          (chatDoc.data() as Map<String, dynamic>)['postId'] as String?;
+      if (postId != null && postId.isNotEmpty) {
+        await firestore
+            .collection('posts')
+            .doc(postId)
+            .update({'status': 'open'});
       }
+
+      await firestore.collection('chatRooms').doc(widget.room.id).delete();
+
+      if (otherUid.isNotEmpty) {
+        await NotificationService.send(
+          toUid: otherUid,
+          type: 'exchange',
+          title: '🔄 물물교환이 취소됐어요',
+          body: '${store.name}님이 "${widget.room.title}" 거래를 파기했어요.',
+        );
+      }
+
+      if (context.mounted) Navigator.pop(context);
+    } catch (e) {
+      if (context.mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('오류: $e')));
     }
   }
 
@@ -363,8 +447,8 @@ class ChatScreenState extends State<ChatScreen> {
     final confirm = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             title: const Text('채팅 나가기'),
             content: const Text('채팅방을 나가시겠습니까?'),
             actions: [
@@ -377,8 +461,7 @@ class ChatScreenState extends State<ChatScreen> {
                 onPressed: () => Navigator.pop(ctx, true),
                 style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary),
-                child: const Text('예',
-                    style: TextStyle(color: Colors.white)),
+                child: const Text('예', style: TextStyle(color: Colors.white)),
               ),
             ],
           ),
@@ -390,36 +473,28 @@ class ChatScreenState extends State<ChatScreen> {
     try {
       final store = UserStoreProvider.of(context);
       final firestore = FirebaseFirestore.instance;
-      final roomRef =
-          firestore.collection('chatRooms').doc(widget.room.id);
+      final roomRef = firestore.collection('chatRooms').doc(widget.room.id);
 
-      // 시스템 메시지: "<이름>님이 나가셨습니다."
       await roomRef.collection('messages').add({
         'senderName': 'system',
         'text': '${store.name}님이 나가셨습니다.',
         'time': FieldValue.serverTimestamp(),
       });
 
-      // chatRoom members 에서 본인 UID 제거
       await roomRef.update({
         'members': FieldValue.arrayRemove([store.uid]),
         'lastMessage': '${store.name}님이 나가셨습니다.',
         'lastMessageTime': FieldValue.serverTimestamp(),
       });
 
-      // ── 공동구매 채팅방이면 게시글 참여 인원도 감소 ──
-      // 채팅방 ID == 게시글 ID 이므로 widget.room.id 를 그대로 사용
       if (widget.room.type == ChatRoomType.groupBuy) {
         await firestore.runTransaction((transaction) async {
-          final postRef =
-              firestore.collection('posts').doc(widget.room.id);
+          final postRef = firestore.collection('posts').doc(widget.room.id);
           final postSnap = await transaction.get(postRef);
           if (postSnap.exists) {
             final data = postSnap.data() as Map<String, dynamic>;
-            final current =
-                (data['currentParticipants'] as int?) ?? 1;
+            final current = (data['currentParticipants'] as int?) ?? 1;
             final max = (data['maxParticipants'] as int?) ?? 2;
-            // 최소 1 (작성자는 항상 남아 있음)
             final newCount = (current - 1).clamp(1, max);
             transaction.update(postRef, {
               'currentParticipants': newCount,
@@ -429,17 +504,14 @@ class ChatScreenState extends State<ChatScreen> {
         });
       }
 
-      // ── 모임 채팅방이면 게시글 참여 인원 감소 + members 배열에서 UID 제거 ──
       if (widget.room.type == ChatRoomType.gather) {
         await firestore.runTransaction((transaction) async {
-          final postRef =
-              firestore.collection('posts').doc(widget.room.id);
+          final postRef = firestore.collection('posts').doc(widget.room.id);
           final postSnap = await transaction.get(postRef);
           if (postSnap.exists) {
             final data = postSnap.data() as Map<String, dynamic>;
             final current = (data['currentMembers'] as int?) ?? 1;
             final max = (data['maxMembers'] as int?) ?? 2;
-            // 최소 1 (작성자는 항상 남아 있음)
             final newCount = (current - 1).clamp(1, max);
             transaction.update(postRef, {
               'currentMembers': newCount,
@@ -449,12 +521,40 @@ class ChatScreenState extends State<ChatScreen> {
         });
       }
 
+      // 참여자 퇴장 ㅡ 글 작성자한테 알림
+      // 공동구매 참여자가 채팅방 퇴장
+      if (widget.room.type == ChatRoomType.groupBuy) {
+        await NotificationService.send(
+          toUid: widget.room.authorUid,
+          type: 'groupBuy',
+          title: '🛒 공동구매 참여자가 나갔어요',
+          body: '${store.name}님이 "${widget.room.title}"에서 나갔어요.',
+        );
+      }
+      // 모임 참여자가 채팅방 퇴장
+      else if (widget.room.type == ChatRoomType.gather) {
+        await NotificationService.send(
+          toUid: widget.room.authorUid,
+          type: 'gather',
+          title: '👥 모임 참여자가 나갔어요',
+          body: '${store.name}님이 "${widget.room.title}"에서 나갔어요.',
+        );
+      }
+      // 물물교환 취소
+      else if (widget.room.type == ChatRoomType.exchange) {
+        await NotificationService.send(
+          toUid: widget.room.authorUid,
+          type: 'exchange',
+          title: '🔄 물물교환이 취소됐어요',
+          body: '${store.name}님이 "${widget.room.title}" 거래에서 나갔어요.',
+        );
+      }
+
       if (context.mounted) Navigator.pop(context);
     } catch (e) {
-      if (context.mounted) {
+      if (context.mounted)
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text('오류: $e')));
-      }
     }
   }
 
@@ -463,6 +563,7 @@ class ChatScreenState extends State<ChatScreen> {
     if (text.isEmpty) return;
 
     final userName = UserStoreProvider.of(context).name;
+    final uid = UserStoreProvider.of(context).uid;
 
     await FirebaseFirestore.instance
         .collection('chatRooms')
@@ -471,15 +572,18 @@ class ChatScreenState extends State<ChatScreen> {
         .add({
       'text': text,
       'senderName': userName,
+      'senderUid': uid,
       'time': FieldValue.serverTimestamp(),
       'isSystem': false,
     });
+
     await FirebaseFirestore.instance
         .collection('chatRooms')
         .doc(widget.room.id)
         .update({
       'lastMessage': text,
       'lastMessageTime': FieldValue.serverTimestamp(),
+      'lastRead.$uid': FieldValue.serverTimestamp(), // 내가 보낸 건 자동 읽음
     });
 
     _ctrl.clear();
@@ -487,6 +591,8 @@ class ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final currentRoom = _liveRoom ?? widget.room;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -496,45 +602,52 @@ class ChatScreenState extends State<ChatScreen> {
             final store = UserStoreProvider.of(ctx);
             final isAuthor =
                 store.uid.isNotEmpty && store.uid == widget.room.authorUid;
-            if (isAuthor) {
-              return Padding(
-                padding: const EdgeInsets.only(right: 10),
-                child: ElevatedButton(
-                  onPressed: () => _confirmComplete(ctx),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 18, vertical: 7),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20)),
-                    elevation: 0,
+            return Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (isAuthor && widget.room.type == ChatRoomType.exchange)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: ElevatedButton(
+                      onPressed: () => _confirmCancel(ctx),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.error,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 18, vertical: 7),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20)),
+                        elevation: 0,
+                      ),
+                      child: const Text('파기',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14)),
+                    ),
                   ),
-                  child: const Text('완료',
-                      style: TextStyle(
+                Padding(
+                  padding: const EdgeInsets.only(right: 10),
+                  child: ElevatedButton(
+                    onPressed: () =>
+                        isAuthor ? _confirmComplete(ctx) : _confirmLeave(ctx),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 18, vertical: 7),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20)),
+                      elevation: 0,
+                    ),
+                    child: Text(
+                      isAuthor ? '완료' : '나가기',
+                      style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.w700,
-                          fontSize: 14)),
+                          fontSize: 14),
+                    ),
+                  ),
                 ),
-              );
-            }
-            return Padding(
-              padding: const EdgeInsets.only(right: 10),
-              child: ElevatedButton(
-                onPressed: () => _confirmLeave(ctx),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 18, vertical: 7),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20)),
-                  elevation: 0,
-                ),
-                child: const Text('나가기',
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14)),
-              ),
+              ],
             );
           }),
         ],
@@ -548,11 +661,12 @@ class ChatScreenState extends State<ChatScreen> {
                   .doc(widget.room.id)
                   .collection('messages')
                   .orderBy('time', descending: true)
+                  .where('time', isGreaterThanOrEqualTo: 
+                      Timestamp.fromDate(widget.room.joinedAt[UserStoreProvider.of(context).uid] ?? DateTime(2000)))
                   .snapshots(),
               builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
+                if (snapshot.connectionState == ConnectionState.waiting)
                   return const Center(child: CircularProgressIndicator());
-                }
 
                 final docs = snapshot.data?.docs ?? [];
 
@@ -562,7 +676,6 @@ class ChatScreenState extends State<ChatScreen> {
                   itemCount: docs.length,
                   itemBuilder: (context, i) {
                     final data = docs[i].data() as Map<String, dynamic>;
-
                     final isMe = data['senderName'] ==
                         UserStoreProvider.of(context).name;
 
@@ -575,6 +688,8 @@ class ChatScreenState extends State<ChatScreen> {
                             DateTime.now(),
                       ),
                       senderName: data['senderName'],
+                      senderUid: data['senderUid'] ?? '',
+                      room: currentRoom, // ← 실시간 room 전달
                     );
                   },
                 );
@@ -637,8 +752,29 @@ class _Message {
 class _MessageBubble extends StatelessWidget {
   final _Message msg;
   final String? senderName;
+  final String? senderUid;
+  final ChatRoom room;
 
-  const _MessageBubble({required this.msg, this.senderName});
+  const _MessageBubble({
+    required this.msg,
+    this.senderName,
+    this.senderUid,
+    required this.room,
+  });
+
+  // 이 메시지를 안 읽은 멤버 수
+  int _unreadCount() {
+    if (msg.isSystem) return 0;
+    int unread = 0;
+    for (final uid in room.members) {
+      if (uid == senderUid) continue;
+      final lastRead = room.lastRead[uid];
+      if (lastRead == null || lastRead.isBefore(msg.time)) {
+        unread++;
+      }
+    }
+    return unread;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -659,13 +795,15 @@ class _MessageBubble extends StatelessWidget {
       );
     }
 
+    final unread = _unreadCount();
+
     return Align(
       alignment: msg.isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Column(
         crossAxisAlignment:
             msg.isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
-          if (!msg.isMe && !msg.isSystem && senderName != null)
+          if (!msg.isMe && senderName != null)
             Padding(
               padding: const EdgeInsets.only(left: 8, bottom: 4),
               child: Text(
@@ -674,33 +812,68 @@ class _MessageBubble extends StatelessWidget {
                     fontSize: 12, color: AppColors.textSecondary),
               ),
             ),
-          Container(
-            margin: const EdgeInsets.symmetric(vertical: 4),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            constraints: BoxConstraints(
-                maxWidth: MediaQuery.of(context).size.width * 0.7),
-            decoration: BoxDecoration(
-              color: msg.isMe ? AppColors.primary : AppColors.surface,
-              borderRadius: BorderRadius.only(
-                topLeft: const Radius.circular(16),
-                topRight: const Radius.circular(16),
-                bottomLeft: msg.isMe
-                    ? const Radius.circular(16)
-                    : const Radius.circular(4),
-                bottomRight: msg.isMe
-                    ? const Radius.circular(4)
-                    : const Radius.circular(16),
+          Row(
+            mainAxisAlignment:
+                msg.isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              // 내 메시지: 숫자가 말풍선 왼쪽
+              if (msg.isMe && unread > 0)
+                Padding(
+                  padding: const EdgeInsets.only(right: 4, bottom: 4),
+                  child: Text(
+                    '$unread',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFFFFC107), // 노란색
+                    ),
+                  ),
+                ),
+              Container(
+                margin: const EdgeInsets.symmetric(vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                constraints: BoxConstraints(
+                    maxWidth: MediaQuery.of(context).size.width * 0.7),
+                decoration: BoxDecoration(
+                  color: msg.isMe ? AppColors.primary : AppColors.surface,
+                  borderRadius: BorderRadius.only(
+                    topLeft: const Radius.circular(16),
+                    topRight: const Radius.circular(16),
+                    bottomLeft: msg.isMe
+                        ? const Radius.circular(16)
+                        : const Radius.circular(4),
+                    bottomRight: msg.isMe
+                        ? const Radius.circular(4)
+                        : const Radius.circular(16),
+                  ),
+                  border:
+                      msg.isMe ? null : Border.all(color: AppColors.divider),
+                ),
+                child: Text(
+                  msg.text,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: msg.isMe ? Colors.white : AppColors.textPrimary,
+                    height: 1.4,
+                  ),
+                ),
               ),
-              border: msg.isMe ? null : Border.all(color: AppColors.divider),
-            ),
-            child: Text(
-              msg.text,
-              style: TextStyle(
-                fontSize: 14,
-                color: msg.isMe ? Colors.white : AppColors.textPrimary,
-                height: 1.4,
-              ),
-            ),
+              // 상대방 메시지: 숫자가 말풍선 오른쪽
+              if (!msg.isMe && unread > 0)
+                Padding(
+                  padding: const EdgeInsets.only(left: 4, bottom: 4),
+                  child: Text(
+                    '$unread',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFFFFC107),
+                    ),
+                  ),
+                ),
+            ],
           ),
         ],
       ),
