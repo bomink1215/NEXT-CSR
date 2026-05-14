@@ -693,7 +693,7 @@ class _GatherDetail extends StatelessWidget {
         '${post.meetTime.month}/${post.meetTime.day} ${post.meetTime.hour}:${post.meetTime.minute.toString().padLeft(2, '0')}';
 
     return Container(
-      height: MediaQuery.of(context).size.height * 0.65,
+      height: MediaQuery.of(context).size.height * 0.75,
       decoration: const BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -708,7 +708,7 @@ class _GatherDetail extends StatelessWidget {
                   color: AppColors.divider,
                   borderRadius: BorderRadius.circular(2))),
           Expanded(
-            child: Padding(
+            child: SingleChildScrollView(
               padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -755,7 +755,7 @@ class _GatherDetail extends StatelessWidget {
                       ],
                     ),
                   ),
-                  const Spacer(),
+                  const SizedBox(height: 24),
                   Builder(builder: (ctx) {
                     final store = UserStoreProvider.of(ctx);
                     final isAuthor =
@@ -810,6 +810,7 @@ class _GatherDetail extends StatelessWidget {
                       ),
                     );
                   }),
+                  const SizedBox(height: 8),
                 ],
               ),
             ),
