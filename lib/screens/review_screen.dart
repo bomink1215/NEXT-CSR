@@ -4,6 +4,7 @@ import '../theme/app_theme.dart';
 import '../models/models.dart';
 import '../models/user_store.dart';
 import '../widgets/common_widgets.dart';
+import '../utils/location_picker.dart';
 
 // ── 카테고리 상수 ───────────────────────────────────────────────
 const _kReviewCategories = [
@@ -155,9 +156,20 @@ class _ReviewScreenState extends State<ReviewScreen> {
                 }
 
                 final docs = snapshot.data!.docs;
+                final filterLoc = store.filterLocation;
+                final locationDocs = docs.where((doc) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  final loc = (data['location'] as String? ?? '');
+                  if (loc.isEmpty || filterLoc.isEmpty) return true;
+                  if (loc.startsWith(filterLoc)) return true;
+                  // 하위 호환: 이전 글은 짧은 형식으로 저장됨
+                  return loc.split(' ')
+                      .where((p) => p.length >= 2)
+                      .any((p) => filterLoc.contains(p));
+                }).toList();
                 final filtered = _searchQuery.isEmpty
-                    ? docs
-                    : docs.where((doc) {
+                    ? locationDocs
+                    : locationDocs.where((doc) {
                         final data = doc.data() as Map<String, dynamic>;
                         final q = _searchQuery.toLowerCase();
                         return (data['buildingName'] ?? '').toString().toLowerCase().contains(q) ||
@@ -207,6 +219,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
                       id: doc.id,
                       buildingName: data['buildingName'] ?? '',
                       address: data['address'] ?? '',
+                      location: data['location'] ?? '',
                       rating: (data['rating'] ?? 3.0).toDouble(),
                       summaryText: data['reviewText'] ?? '',
                       tags: tags,
@@ -664,8 +677,9 @@ class _WriteReviewSheetState extends State<_WriteReviewSheet> {
   double _rating = 3.0;
   bool _isSubmitting = false;
   final _buildingController = TextEditingController();
-  final _addressController = TextEditingController();
+  final _detailAddressController = TextEditingController(); // 상세주소
   final _reviewController = TextEditingController();
+  String _selectedArea = ''; // 시/구/동 (필터링용)
 
   // 카테고리별 평가: null = 미선택, 'good' | 'normal' | 'bad'
   final Map<String, String?> _ratings = {
@@ -675,9 +689,19 @@ class _WriteReviewSheetState extends State<_WriteReviewSheet> {
   @override
   void dispose() {
     _buildingController.dispose();
-    _addressController.dispose();
+    _detailAddressController.dispose();
     _reviewController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickArea() async {
+    final result = await showLocationPicker(
+      context,
+      currentLocation: _selectedArea,
+    );
+    if (result != null && mounted) {
+      setState(() => _selectedArea = result);
+    }
   }
 
   void _showErrorDialog(String message) {
@@ -699,9 +723,8 @@ class _WriteReviewSheetState extends State<_WriteReviewSheet> {
   Future<void> _submit() async {
     final reviewText = _reviewController.text.trim();
 
-    if (_buildingController.text.trim().isEmpty ||
-        _addressController.text.trim().isEmpty) {
-      _showErrorDialog('건물명과 주소를 입력해주세요.');
+    if (_buildingController.text.trim().isEmpty || _selectedArea.isEmpty) {
+      _showErrorDialog('건물명과 주소(시/구/동)를 입력해주세요.');
       return;
     }
 
@@ -745,10 +768,15 @@ class _WriteReviewSheetState extends State<_WriteReviewSheet> {
         return 0;
       });
 
+      // 전체 주소 = 시/구/동 + 상세주소
+      final detail = _detailAddressController.text.trim();
+      final fullAddress = detail.isEmpty ? _selectedArea : '$_selectedArea $detail';
+
       // Firestore에 리뷰 저장
       await firestore.collection('reviews').add({
         'buildingName': _buildingController.text.trim(),
-        'address': _addressController.text.trim(),
+        'address': fullAddress,
+        'location': _selectedArea, // 시/구/동 (필터링용)
         'rating': _rating,
         'reviewText': reviewText,
         'authorName': store.name,
@@ -827,17 +855,30 @@ class _WriteReviewSheetState extends State<_WriteReviewSheet> {
                         hintText: '예) 안암 원룸, 행복빌라'),
                   ),
                   const SizedBox(height: 16),
-                  // 주소
+                  // 주소 - 시/구/동 선택
                   const Text('주소',
                       style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
                           color: AppColors.textSecondary)),
+                  const SizedBox(height: 4),
+                  const Text('리뷰 건물의 시/구/동을 선택하세요',
+                      style: TextStyle(fontSize: 12, color: AppColors.textHint)),
                   const SizedBox(height: 8),
+                  LocationPickerButton(
+                    selectedLocation: _selectedArea,
+                    hint: '시/구/동 선택 (예: 서울특별시 성북구 안암동)',
+                    onTap: _pickArea,
+                  ),
+                  const SizedBox(height: 8),
+                  // 상세주소
                   TextField(
-                    controller: _addressController,
+                    controller: _detailAddressController,
                     decoration: const InputDecoration(
-                        hintText: '예) 서울 성북구 안암동 12-5'),
+                      hintText: '상세주소 입력 (예: 안암로 145 101호)',
+                      prefixIcon: Icon(Icons.edit_location_alt_outlined,
+                          color: AppColors.textHint),
+                    ),
                   ),
                   const SizedBox(height: 16),
                   // 별점
@@ -1070,9 +1111,10 @@ class _EditReviewSheet extends StatefulWidget {
 
 class _EditReviewSheetState extends State<_EditReviewSheet> {
   late final TextEditingController _buildingController;
-  late final TextEditingController _addressController;
+  late final TextEditingController _detailAddressController;
   late final TextEditingController _reviewController;
   late double _rating;
+  late String _selectedArea;
   bool _isSaving = false;
 
   @override
@@ -1080,7 +1122,12 @@ class _EditReviewSheetState extends State<_EditReviewSheet> {
     super.initState();
     _buildingController =
         TextEditingController(text: widget.review.buildingName);
-    _addressController = TextEditingController(text: widget.review.address);
+    _selectedArea = widget.review.location;
+    // 상세주소: location 필드가 있으면 address에서 area 부분 제거, 없으면 전체 address
+    final detail = _selectedArea.isNotEmpty
+        ? widget.review.address.replaceFirst(_selectedArea, '').trim()
+        : widget.review.address;
+    _detailAddressController = TextEditingController(text: detail);
     _reviewController = TextEditingController(text: widget.review.summaryText);
     _rating = widget.review.rating;
   }
@@ -1088,20 +1135,29 @@ class _EditReviewSheetState extends State<_EditReviewSheet> {
   @override
   void dispose() {
     _buildingController.dispose();
-    _addressController.dispose();
+    _detailAddressController.dispose();
     _reviewController.dispose();
     super.dispose();
   }
 
+  Future<void> _pickArea() async {
+    final result = await showLocationPicker(
+      context,
+      currentLocation: _selectedArea,
+    );
+    if (result != null && mounted) {
+      setState(() => _selectedArea = result);
+    }
+  }
+
   Future<void> _save() async {
-    if (_buildingController.text.trim().isEmpty ||
-        _addressController.text.trim().isEmpty) {
+    if (_buildingController.text.trim().isEmpty || _selectedArea.isEmpty) {
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          content: const Text('건물명과 주소를 입력해주세요.',
+          content: const Text('건물명과 주소(시/구/동)를 입력해주세요.',
               style: TextStyle(fontSize: 15)),
           actions: [
             TextButton(
@@ -1133,12 +1189,16 @@ class _EditReviewSheetState extends State<_EditReviewSheet> {
     }
     setState(() => _isSaving = true);
     try {
+      final detail = _detailAddressController.text.trim();
+      final fullAddress =
+          detail.isEmpty ? _selectedArea : '$_selectedArea $detail';
       await FirebaseFirestore.instance
           .collection('reviews')
           .doc(widget.review.id)
           .update({
         'buildingName': _buildingController.text.trim(),
-        'address': _addressController.text.trim(),
+        'address': fullAddress,
+        'location': _selectedArea,
         'rating': _rating,
         'reviewText': _reviewController.text.trim(),
       });
@@ -1210,10 +1270,19 @@ class _EditReviewSheetState extends State<_EditReviewSheet> {
                           fontWeight: FontWeight.w600,
                           color: AppColors.textSecondary)),
                   const SizedBox(height: 8),
+                  LocationPickerButton(
+                    selectedLocation: _selectedArea,
+                    hint: '시/구/동 선택 (예: 서울특별시 성북구 안암동)',
+                    onTap: _pickArea,
+                  ),
+                  const SizedBox(height: 8),
                   TextField(
-                    controller: _addressController,
+                    controller: _detailAddressController,
                     decoration: const InputDecoration(
-                        hintText: '예) 서울 성북구 안암동 12-5'),
+                      hintText: '상세주소 입력 (예: 안암로 145 101호)',
+                      prefixIcon: Icon(Icons.edit_location_alt_outlined,
+                          color: AppColors.textHint),
+                    ),
                   ),
                   const SizedBox(height: 16),
                   const Text('별점',

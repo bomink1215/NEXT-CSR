@@ -78,6 +78,7 @@ class _GroupBuyScreenState extends State<GroupBuyScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final filterLoc = UserStoreProvider.of(context).filterLocation;
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('공동구매')),
@@ -195,9 +196,19 @@ class _GroupBuyScreenState extends State<GroupBuyScreen> {
                 }
 
                 final uid = UserStoreProvider.of(context).uid;
+                final locationDocs = docs.where((doc) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  final loc = (data['location'] as String? ?? '');
+                  if (loc.isEmpty || filterLoc.isEmpty) return true;
+                  if (loc.startsWith(filterLoc)) return true;
+                  // 하위 호환: 이전 글은 "안암동", "성북구 안암동" 등 짧은 형식으로 저장됨
+                  return loc.split(' ')
+                      .where((p) => p.length >= 2)
+                      .any((p) => filterLoc.contains(p));
+                }).toList();
                 final categoryDocs = _selectedFilter == '전체'
-                    ? docs
-                    : docs
+                    ? locationDocs
+                    : locationDocs
                         .where((doc) => doc['category'] == _selectedFilter)
                         .toList();
 

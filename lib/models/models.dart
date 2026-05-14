@@ -118,6 +118,7 @@ class RoomReview {
   final String id;
   final String buildingName;
   final String address;
+  final String location; // 시/구/동 필터링용 (예: 서울특별시 성북구 안암동)
   final double rating;
   final String summaryText;
   final List<ReviewTag> tags;
@@ -132,6 +133,7 @@ class RoomReview {
     required this.id,
     required this.buildingName,
     required this.address,
+    this.location = '',
     required this.rating,
     required this.summaryText,
     required this.tags,

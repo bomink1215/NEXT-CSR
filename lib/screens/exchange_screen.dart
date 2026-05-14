@@ -56,6 +56,7 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final filterLoc = UserStoreProvider.of(context).filterLocation;
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('물물교환')),
@@ -159,10 +160,20 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
 
                   final docs = snapshot.data!.docs;
                   final uid = UserStoreProvider.of(context).uid;
+                  final locationDocs = docs.where((doc) {
+                    final data = doc.data() as Map<String, dynamic>;
+                    final loc = (data['location'] as String? ?? '');
+                    if (loc.isEmpty || filterLoc.isEmpty) return true;
+                    if (loc.startsWith(filterLoc)) return true;
+                    // 하위 호환: 이전 글은 짧은 형식으로 저장됨
+                    return loc.split(' ')
+                        .where((p) => p.length >= 2)
+                        .any((p) => filterLoc.contains(p));
+                  }).toList();
 
                   final filteredDocs = (_searchQuery.isEmpty
-                      ? docs
-                      : docs.where((doc) {
+                      ? locationDocs
+                      : locationDocs.where((doc) {
                           final data = doc.data() as Map<String, dynamic>;
                           final q = _searchQuery.toLowerCase();
                           return (data['title'] ?? '')

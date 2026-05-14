@@ -4,6 +4,7 @@ import '../models/user_store.dart';
 import 'home_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../utils/rating_checker.dart';
+import '../utils/location_picker.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -276,20 +277,15 @@ class _SignupFormState extends State<_SignupForm> {
   final _pwController = TextEditingController();
   final _pwConfirmController = TextEditingController();
   final _nameController = TextEditingController();
-  final _locationController = TextEditingController();
 
   String _selectedGender = '';
   DateTime? _selectedBirthDate;
+  String _selectedLocation = '';
   bool _isLoading = false;
   bool _obscurePw = true;
   bool _obscurePwConfirm = true;
   bool _idChecked = false; // 중복확인 여부
   bool _idAvailable = false; // 사용 가능 여부
-
-  final List<String> _suggestions = [
-    '안암동', '종암동', '정릉동', '길음동', '미아동',
-    '성북동', '돈암동', '석관동', '장위동', '월곡동',
-  ];
 
   @override
   void dispose() {
@@ -297,8 +293,17 @@ class _SignupFormState extends State<_SignupForm> {
     _pwController.dispose();
     _pwConfirmController.dispose();
     _nameController.dispose();
-    _locationController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickLocation() async {
+    final result = await showLocationPicker(
+      context,
+      currentLocation: _selectedLocation,
+    );
+    if (result != null && mounted) {
+      setState(() => _selectedLocation = result);
+    }
   }
 
   Future<void> _checkIdDuplicate() async {
@@ -369,8 +374,8 @@ class _SignupFormState extends State<_SignupForm> {
       _showError('생년월일을 선택해주세요.');
       return;
     }
-    if (_locationController.text.trim().isEmpty) {
-      _showError('거주지를 입력해주세요.');
+    if (_selectedLocation.isEmpty) {
+      _showError('거주지를 선택해주세요.');
       return;
     }
 
@@ -387,7 +392,7 @@ class _SignupFormState extends State<_SignupForm> {
         'name': _nameController.text.trim(),
         'gender': _selectedGender,
         'birthDate': birthDate,
-        'location': _locationController.text.trim(),
+        'location': _selectedLocation,
         'points': 0,
         'createdAt': FieldValue.serverTimestamp(),
       });
@@ -397,7 +402,7 @@ class _SignupFormState extends State<_SignupForm> {
         name: _nameController.text.trim(),
         gender: _selectedGender,
         birthDate: birthDate,
-        location: _locationController.text.trim(),
+        location: _selectedLocation,
         uid: docRef.id,
         points: 0,
       );
@@ -633,47 +638,12 @@ class _SignupFormState extends State<_SignupForm> {
             style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
         const SizedBox(height: 4),
         const Text('공동구매·모임 등 근처 이웃과 매칭할 때 사용돼요',
-            style:
-                TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+            style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
         const SizedBox(height: 8),
-        TextField(
-          controller: _locationController,
-          decoration: _inputDeco(
-              hint: '예) 안암동', icon: Icons.location_on_outlined),
-        ),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: _suggestions.map((s) {
-            final isSelected = _locationController.text == s;
-            return GestureDetector(
-              onTap: () => setState(() => _locationController.text = s),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? AppColors.primaryLight
-                      : AppColors.surface,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: isSelected
-                        ? AppColors.primary
-                        : AppColors.divider,
-                  ),
-                ),
-                child: Text(s,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      color: isSelected
-                          ? AppColors.primary
-                          : AppColors.textSecondary,
-                    )),
-              ),
-            );
-          }).toList(),
+        LocationPickerButton(
+          selectedLocation: _selectedLocation,
+          hint: '시/구/동을 선택해주세요',
+          onTap: _pickLocation,
         ),
         const SizedBox(height: 40),
 

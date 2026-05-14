@@ -57,6 +57,7 @@ class _GatherScreenState extends State<GatherScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final filterLoc = UserStoreProvider.of(context).filterLocation;
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('모임 찾기')),
@@ -86,13 +87,24 @@ class _GatherScreenState extends State<GatherScreen> {
           final userGender = userStore.gender;
           final userAgeCategory = userStore.ageCategory;
 
-          // 사용자 성별/나이대에 맞는 모임만 표시
+          // 사용자 성별/나이대/위치에 맞는 모임만 표시
           final profileDocs = allDocs.where((doc) {
             final d = doc.data() as Map<String, dynamic>;
 
             final meetTime = (d['meetTime'] as Timestamp?)?.toDate();
             if (meetTime != null && meetTime.isBefore(DateTime.now()))
               return false;
+
+            // 위치 필터 (이전 글 하위 호환 포함)
+            final loc = (d['location'] as String? ?? '');
+            if (loc.isEmpty || filterLoc.isEmpty) return true;  // location 없으면 표시
+            if (!loc.startsWith(filterLoc)) {
+              // 하위 호환: 이전 글은 "안암동", "성북구 안암동" 등 짧은 형식으로 저장됨
+              final matches = loc.split(' ')
+                  .where((p) => p.length >= 2)
+                  .any((p) => filterLoc.contains(p));
+              if (!matches) return false;
+            }
 
             final gf = d['genderFilter'] ?? 'any';
             final af = d['ageFilter'] ?? 'any';
