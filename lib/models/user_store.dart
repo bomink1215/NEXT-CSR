@@ -8,7 +8,8 @@ class UserStore extends ChangeNotifier {
   String _birthDate = '';
   int _points = 0;
   String _homeAddress = '';
-  double _avgRating = 0.0;         // ← 추가
+  double _avgRating = 0.0;
+  int _locationScope = 0; // 0=자동(최대), 몇 번째 파트까지 쓸지
 
   String get name => _name;
   String get location => _location;
@@ -17,8 +18,17 @@ class UserStore extends ChangeNotifier {
   String get birthDate => _birthDate;
   int get points => _points;
   String get homeAddress => _homeAddress;
-  double get avgRating => _avgRating;             // ← 추가
+  double get avgRating => _avgRating;
+  int get locationScope => _locationScope;
   bool get isSignedUp => _name.isNotEmpty && _location.isNotEmpty;
+
+  // 실제 필터로 쓸 location prefix (scope에 따라 1~N 파트)
+  String get filterLocation {
+    final parts = _location.split(' ').where((p) => p.isNotEmpty).toList();
+    if (parts.isEmpty) return _location;
+    final take = _locationScope == 0 ? parts.length : _locationScope;
+    return parts.take(take.clamp(1, parts.length)).join(' ');
+  }
 
   String get ageCategory {
     if (_birthDate.isEmpty) return 'other';
@@ -56,6 +66,12 @@ class UserStore extends ChangeNotifier {
 
   void updateLocation(String location) {
     _location = location;
+    _locationScope = 0; // 위치 바뀌면 범위 초기화
+    notifyListeners();
+  }
+
+  void setLocationScope(int scope) {
+    _locationScope = scope;
     notifyListeners();
   }
 

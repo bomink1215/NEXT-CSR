@@ -169,144 +169,156 @@ class _HomeTab extends StatelessWidget {
 
   void _showLocationSheet(BuildContext context) {
     final store = UserStoreProvider.of(context);
-    final controller = TextEditingController(text: store.location);
-    final suggestions = [
-      '안암동', '종암동', '정릉동', '길음동', '미아동',
-      '성북동', '돈암동', '석관동', '장위동', '월곡동',
-    ];
+    final parts = store.location.split(' ').where((p) => p.isNotEmpty).toList();
+    int scope = store.locationScope == 0 ? parts.length : store.locationScope;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => StatefulBuilder(
-        builder: (context, setModalState) => Container(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-            top: 20,
-            left: 20,
-            right: 20,
-          ),
-          decoration: const BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
+        builder: (ctx, setModalState) {
+          return Container(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 36),
+            decoration: const BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40, height: 4,
+                    decoration: BoxDecoration(
+                      color: AppColors.divider,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const Text('내 동네 범위 설정',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 4),
+                const Text('선택한 범위 내 이웃의 글을 볼 수 있어요',
+                    style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                const SizedBox(height: 24),
+
+                // 현재 주소 표시
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   decoration: BoxDecoration(
-                    color: AppColors.divider,
-                    borderRadius: BorderRadius.circular(2),
+                    color: AppColors.background,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.divider),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.location_on_outlined,
+                          color: AppColors.primary, size: 18),
+                      const SizedBox(width: 8),
+                      Text(store.location,
+                          style: const TextStyle(
+                              fontSize: 14, fontWeight: FontWeight.w600)),
+                    ],
                   ),
                 ),
-              ),
-              const SizedBox(height: 20),
-              const Text(
-                '내 동네 변경',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 4),
-              const Text(
-                '변경하면 근처 이웃 매칭 기준이 바뀌어요',
-                style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: controller,
-                autofocus: true,
-                onChanged: (_) => setModalState(() {}),
-                decoration: InputDecoration(
-                  hintText: '동네 이름 입력',
-                  prefixIcon: const Icon(Icons.location_on_outlined,
-                      color: AppColors.textHint),
-                  filled: true,
-                  fillColor: AppColors.background,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: AppColors.divider),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: AppColors.divider),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide:
-                        const BorderSide(color: AppColors.primary, width: 1.5),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: suggestions.map((s) {
-                  final isSelected = controller.text == s;
-                  return GestureDetector(
-                    onTap: () => setModalState(() => controller.text = s),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? AppColors.primaryLight
-                            : AppColors.background,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: isSelected
-                              ? AppColors.primary
-                              : AppColors.divider,
-                        ),
-                      ),
-                      child: Text(
-                        s,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: isSelected
-                              ? AppColors.primary
-                              : AppColors.textSecondary,
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    final newLocation = controller.text.trim();
-                    if (newLocation.isNotEmpty) {
-                      store.updateLocation(newLocation);
-                      Navigator.pop(context);
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: const Text(
-                    '변경하기',
+                const SizedBox(height: 20),
+
+                const Text('범위 선택',
                     style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textSecondary)),
+                const SizedBox(height: 10),
+
+                // 범위 칩 (시도 / 구 / 동)
+                if (parts.isEmpty)
+                  const Text('주소 정보가 없어요',
+                      style: TextStyle(color: AppColors.textHint))
+                else
+                  Row(
+                    children: List.generate(parts.length, (i) {
+                      final level = i + 1; // 1=시도, 2=구, 3=동
+                      final isSelected = scope == level;
+                      final label = parts[i];
+                      return Expanded(
+                        child: GestureDetector(
+                          onTap: () => setModalState(() => scope = level),
+                          child: Container(
+                            margin: EdgeInsets.only(
+                                right: i < parts.length - 1 ? 8 : 0),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? AppColors.primary
+                                  : AppColors.background,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isSelected
+                                    ? AppColors.primary
+                                    : AppColors.divider,
+                              ),
+                            ),
+                            child: Column(
+                              children: [
+                                Text(label,
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: isSelected
+                                          ? Colors.white
+                                          : AppColors.textPrimary,
+                                    )),
+                                const SizedBox(height: 2),
+                                Text(
+                                  i == 0
+                                      ? '시/도 전체'
+                                      : i == 1
+                                          ? '구/군 전체'
+                                          : '동네만',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: isSelected
+                                        ? Colors.white70
+                                        : AppColors.textHint,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
+                  ),
+
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      store.setLocationScope(scope);
+                      Navigator.pop(ctx);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Text('적용하기',
+                        style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white)),
                   ),
                 ),
-              ),
-            ],
-          ),
-        ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
@@ -345,7 +357,7 @@ class _HomeTab extends StatelessWidget {
                           Row(
                             children: [
                               Text(
-                                '📍 ${store.location}',
+                                '📍 ${store.filterLocation}',
                                 style: const TextStyle(
                                   fontSize: 15,
                                   fontWeight: FontWeight.w700,
@@ -632,6 +644,8 @@ class _RecentGroupBuy extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
+    final filterLoc = UserStoreProvider.of(context).filterLocation;
+
     return SizedBox(
       height: 160,
       child: StreamBuilder<QuerySnapshot>(
@@ -646,6 +660,13 @@ class _RecentGroupBuy extends StatelessWidget {
             return const Center(child: CircularProgressIndicator());
 
           var docs = snapshot.data!.docs;
+
+          // 위치 범위 필터
+          docs = docs.where((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            final loc = (data['location'] as String? ?? '');
+            return loc.startsWith(filterLoc);
+          }).toList();
 
           // 마감기한 지난 글 제거
           docs = docs.where((doc) {
@@ -768,6 +789,7 @@ class _TodayGather extends StatelessWidget {
   Widget build(BuildContext context) {
     final now = DateTime.now();
     final endOfDay = DateTime(now.year, now.month, now.day, 23, 59, 59);
+    final filterLoc = UserStoreProvider.of(context).filterLocation;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -780,15 +802,17 @@ class _TodayGather extends StatelessWidget {
           if (!snapshot.hasData)
             return const Center(child: CircularProgressIndicator());
 
-          // 마감된 모임 제외 + 정렬
+          // 마감된 모임 제외 + 위치 필터 + 정렬
           final docs = snapshot.data!.docs.where((doc) {
             final data = doc.data() as Map<String, dynamic>;
             final meetTime = (data['meetTime'] as Timestamp).toDate();
             final current = data['currentMembers'] ?? 0;
             final max = data['maxMembers'] ?? 1;
+            final loc = (data['location'] as String? ?? '');
             return meetTime.isAfter(now) &&
                 meetTime.isBefore(endOfDay) &&
-                current < max;
+                current < max &&
+                loc.startsWith(filterLoc);
           }).toList()
             ..sort((a, b) {
               final aTime = ((a.data() as Map)['meetTime'] as Timestamp).toDate();
