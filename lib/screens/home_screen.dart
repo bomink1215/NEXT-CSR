@@ -138,8 +138,8 @@ class _HomeTabState extends State<_HomeTab> {
         final roomEmoji = switch (roomType) {
           'groupBuy' => '🛒',
           'exchange' => '🔄',
-          'gather'   => '👥',
-          _          => '💬',
+          'gather' => '👥',
+          _ => '💬',
         };
 
         final sub = FirebaseFirestore.instance

@@ -18,6 +18,8 @@ class GroupBuyPost {
   final bool isDelivery;
   final DateTime? deadline;
   final String meetingPlace;
+  final bool isPinned;
+  final DateTime? pinnedUntil;
 
   GroupBuyPost({
     required this.id,
@@ -36,6 +38,8 @@ class GroupBuyPost {
     required this.isDelivery,
     this.meetingPlace = '',
     this.deadline,
+    this.isPinned = false,
+    this.pinnedUntil,
   });
 
   bool get isFull => currentParticipants >= maxParticipants;
@@ -57,6 +61,8 @@ class ExchangePost {
   final DateTime createdAt;
   final ExchangeStatus status;
   final String meetingPlace;
+  final bool isPinned;
+  final DateTime? pinnedUntil;
 
   ExchangePost({
     required this.id,
@@ -72,6 +78,8 @@ class ExchangePost {
     required this.createdAt,
     required this.status,
     this.meetingPlace = '',
+    this.isPinned = false,
+    this.pinnedUntil,
   });
   factory ExchangePost.fromMap(Map<String, dynamic> data, String documentId) {
     return ExchangePost(
@@ -91,6 +99,8 @@ class ExchangePost {
         orElse: () => ExchangeStatus.open,
       ),
       meetingPlace: data['meetingPlace'] ?? '',
+      isPinned: data['isPinned'] ?? false,
+      pinnedUntil: (data['pinnedUntil'] as Timestamp?)?.toDate(),
     );
   }
 
@@ -169,6 +179,8 @@ class GatherPost {
   final AgeFilter ageFilter;
   final String category;
   final DateTime createdAt;
+  final bool isPinned;
+  final DateTime? pinnedUntil;
 
   GatherPost({
     required this.id,
@@ -185,6 +197,8 @@ class GatherPost {
     required this.ageFilter,
     this.category = '기타',
     required this.createdAt,
+    this.isPinned = false,
+    this.pinnedUntil,
   });
 
   bool get isFull => currentMembers >= maxMembers;
@@ -217,6 +231,8 @@ class GatherPost {
       createdAt: data['createdAt'] != null
           ? (data['createdAt'] as Timestamp).toDate()
           : DateTime.now(),
+      isPinned: data['isPinnned'] ?? false,
+      pinnedUntil: (data['pinnedUntil'] as Timestamp?)?.toDate(),
     );
   }
 }

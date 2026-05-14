@@ -327,3 +327,123 @@ class EmptyState extends StatelessWidget {
     );
   }
 }
+
+// ─── 상단 노출 다이얼로그 ─────────────────────────────────────────
+class PinDialog extends StatelessWidget {
+  final int currentPoints;
+  final Future<void> Function(int cost, int hours) onConfirm;
+
+  const PinDialog({
+    super.key,
+    required this.currentPoints,
+    required this.onConfirm,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: const Text('🔥 상단 노출',
+          style: TextStyle(fontWeight: FontWeight.w700)),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            '현재 보유 포인트: ${currentPoints}P',
+            style: const TextStyle(color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 16),
+          _PinOption(
+            hours: 2, cost: 10, currentPoints: currentPoints,
+            onTap: () async {
+              Navigator.pop(context);
+              await onConfirm(10, 2);
+            },
+          ),
+          const SizedBox(height: 8),
+          _PinOption(
+            hours: 12, cost: 20, currentPoints: currentPoints,
+            onTap: () async {
+              Navigator.pop(context);
+              await onConfirm(20, 12);
+            },
+          ),
+          const SizedBox(height: 8),
+          _PinOption(
+            hours: 24, cost: 30, currentPoints: currentPoints,
+            onTap: () async {
+              Navigator.pop(context);
+              await onConfirm(30, 24);
+            },
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('취소',
+              style: TextStyle(color: AppColors.textSecondary)),
+        ),
+      ],
+    );
+  }
+}
+
+class _PinOption extends StatelessWidget {
+  final int hours;
+  final int cost;
+  final int currentPoints;
+  final VoidCallback onTap;
+
+  const _PinOption({
+    required this.hours,
+    required this.cost,
+    required this.currentPoints,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final canAfford = currentPoints >= cost;
+    return GestureDetector(
+      onTap: canAfford ? onTap : null,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: canAfford
+              ? AppColors.primary.withOpacity(0.08)
+              : AppColors.cardBg,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: canAfford
+                ? AppColors.primary.withOpacity(0.3)
+                : AppColors.divider,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              '$hours시간 상단 노출',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: canAfford
+                    ? AppColors.textPrimary
+                    : AppColors.textHint,
+              ),
+            ),
+            Text(
+              '${cost}P',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: canAfford ? AppColors.primary : AppColors.textHint,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

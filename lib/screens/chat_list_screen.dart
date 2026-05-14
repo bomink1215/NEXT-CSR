@@ -417,6 +417,15 @@ class ChatScreenState extends State<ChatScreen> {
         }
       }
 
+      final messages = await firestore
+          .collection('chatRooms')
+          .doc(widget.room.id)
+          .collection('messages')
+          .get();
+      for (final msg in messages.docs) {
+        await msg.reference.delete();
+      }
+      
       await firestore.collection('chatRooms').doc(widget.room.id).delete();
       if (context.mounted) Navigator.pop(context);
     } catch (e) {

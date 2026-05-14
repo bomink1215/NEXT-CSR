@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class UserStore extends ChangeNotifier {
   String _name = '';
@@ -96,6 +97,17 @@ class UserStore extends ChangeNotifier {
   void setCurrentChatRoomId(String id) {
     _currentChatRoomId = id;
     notifyListeners();
+  }
+
+  Future<bool> deductPoints(int amount) async {
+    if (_points < amount) return false;
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(_uid)
+        .update({'points': FieldValue.increment(-amount)});
+    _points -= amount;
+    notifyListeners();
+    return true;
   }
 }
 

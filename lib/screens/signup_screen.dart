@@ -5,6 +5,7 @@ import 'home_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../utils/rating_checker.dart';
 import '../utils/location_picker.dart';
+import '../utils/notification_service.dart'; // ← 추가
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -177,6 +178,9 @@ class _LoginFormState extends State<_LoginForm> {
         homeAddress: data['homeAddress'] ?? '',
         avgRating: ((data['avgRating'] ?? 0.0) as num).toDouble(),       
       );
+
+      await NotificationService.saveFcmToken(snap.docs.first.id);
+      NotificationService.setupForegroundNotification();
 
       if (!mounted) return;
       RatingChecker.checkAndComplete();
@@ -406,6 +410,9 @@ class _SignupFormState extends State<_SignupForm> {
         uid: docRef.id,
         points: 0,
       );
+
+      await NotificationService.saveFcmToken(docRef.id);
+      NotificationService.setupForegroundNotification();
 
       if (!mounted) return;
       Navigator.of(context).pushReplacement(

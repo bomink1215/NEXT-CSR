@@ -189,9 +189,23 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
                                   .toLowerCase()
                                   .contains(q);
                         }).toList())
+                    .where((doc) {
+                      final data = doc.data() as Map<String, dynamic>;
+                      return (data['status'] as String? ?? '') != 'done';
+                    }).toList()
                     ..sort((a, b) {
                       final aD = a.data() as Map;
                       final bD = b.data() as Map;
+                      
+                      // 🔥 상단 노출 우선 ← 추가
+                      final now = DateTime.now();
+                      final aPinned = (aD['isPinned'] == true) &&
+                          (aD['pinnedUntil'] as Timestamp?)?.toDate().isAfter(now) == true;
+                      final bPinned = (bD['isPinned'] == true) &&
+                          (bD['pinnedUntil'] as Timestamp?)?.toDate().isAfter(now) == true;
+                      if (aPinned && !bPinned) return -1;
+                      if (!aPinned && bPinned) return 1;
+                      
                       final aDone = aD['status'] == 'done';
                       final bDone = bD['status'] == 'done';
                       if (!aDone && bDone) return -1;
@@ -245,6 +259,8 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
                                 ? ExchangeStatus.done
                                 : ExchangeStatus.open,
                             meetingPlace: data['meetingPlace'] ?? '',
+                            isPinned: data['isPinned'] ?? false,        
+                            pinnedUntil: (data['pinnedUntil'] as Timestamp?)?.toDate(),
                           ),
                         ),
                       );
@@ -364,6 +380,30 @@ class _ExchangeCardState extends State<_ExchangeCard> {
               ),
               const SizedBox(height: 12),
             ],
+            if (widget.post.isPinned &&
+                widget.post.pinnedUntil != null &&
+                widget.post.pinnedUntil!.isAfter(DateTime.now())) ...[
+              Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.exchangeColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    Text('🔥', style: TextStyle(fontSize: 12)),
+                    SizedBox(width: 4),
+                    Text('상단 노출 중',
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.exchangeColor)),
+                  ],
+                ),
+              ),
+            ],
             Row(
               children: [
                 TagBadge(label: _statusLabel, color: _statusColor),
@@ -440,6 +480,18 @@ class _ExchangeCardState extends State<_ExchangeCard> {
                 if (isAuthor) ...[
                   const Spacer(),
                   TextButton(
+                    onPressed: () => _showPinDialog(context),
+                    style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                    child: const Text('🔥 상단노출',
+                        style: TextStyle(
+                            fontSize: 13,
+                            color: AppColors.exchangeColor,
+                            fontWeight: FontWeight.w600)),
+                  ),
+                  TextButton(
                     onPressed: () => _showEditSheet(context),
                     style: TextButton.styleFrom(
                         padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -487,6 +539,38 @@ class _ExchangeCardState extends State<_ExchangeCard> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _EditExchangeSheet(post: widget.post),
+    );
+  }
+
+  Future<void> _showPinDialog(BuildContext context) async {
+    final store = UserStoreProvider.of(context);
+    await showDialog(
+      context: context,
+      builder: (ctx) => PinDialog(
+        currentPoints: store.points,
+        onConfirm: (cost, hours) async {
+          final success = await store.deductPoints(cost);
+          if (!success) {
+            if (context.mounted)
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('포인트가 부족해요!')),
+              );
+            return;
+          }
+          final pinnedUntil = DateTime.now().add(Duration(hours: hours));
+          await FirebaseFirestore.instance
+              .collection('posts')
+              .doc(widget.post.id)
+              .update({
+            'isPinned': true,
+            'pinnedUntil': Timestamp.fromDate(pinnedUntil),
+          });
+          if (context.mounted)
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('🔥 ${hours}시간 상단 노출이 시작됐어요!')),
+            );
+        },
+      ),
     );
   }
 
