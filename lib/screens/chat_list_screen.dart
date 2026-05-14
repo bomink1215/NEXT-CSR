@@ -270,6 +270,20 @@ class ChatScreenState extends State<ChatScreen> {
         });
       }
     });
+
+    // 새 메시지 올 때마다 자동 읽음 처리
+    FirebaseFirestore.instance
+        .collection('chatRooms')
+        .doc(widget.room.id)
+        .collection('messages')
+        .orderBy('time', descending: true)
+        .limit(1)
+        .snapshots()
+        .listen((snap) {
+      if (snap.docs.isNotEmpty && mounted) {
+        _markAsRead();
+      }
+    });
   }
 
   @override
