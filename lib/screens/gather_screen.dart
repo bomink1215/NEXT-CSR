@@ -41,7 +41,8 @@ class _GatherScreenState extends State<GatherScreen> {
             .doc(widget.initialPostId)
             .get();
         if (!snap.exists || !mounted) return;
-        final post = GatherPost.fromMap(snap.id, snap.data() as Map<String, dynamic>);
+        final post =
+            GatherPost.fromMap(snap.id, snap.data() as Map<String, dynamic>);
         if (mounted) {
           showModalBottomSheet(
             context: context,
@@ -88,14 +89,17 @@ class _GatherScreenState extends State<GatherScreen> {
           // 사용자 성별/나이대에 맞는 모임만 표시
           final profileDocs = allDocs.where((doc) {
             final d = doc.data() as Map<String, dynamic>;
-            
+
             final meetTime = (d['meetTime'] as Timestamp?)?.toDate();
-            if (meetTime != null && meetTime.isBefore(DateTime.now())) return false;
-  
+            if (meetTime != null && meetTime.isBefore(DateTime.now()))
+              return false;
+
             final gf = d['genderFilter'] ?? 'any';
             final af = d['ageFilter'] ?? 'any';
             if (gf == 'maleOnly' && userGender != '남성') return false;
             if (gf == 'femaleOnly' && userGender != '여성') return false;
+
+            if (af == 'teens' && userAgeCategory != 'teens') return false;
             if (af == 'twenties' && userAgeCategory != 'twenties') return false;
             if (af == 'thirties' && userAgeCategory != 'thirties') return false;
             return true;
@@ -307,18 +311,25 @@ class _GatherCardState extends State<_GatherCard> {
 
   String _genderLabel(GenderFilter f) {
     switch (f) {
-      case GenderFilter.any: return '성별 무관';
-      case GenderFilter.maleOnly: return '남성만';
-      case GenderFilter.femaleOnly: return '여성만';
+      case GenderFilter.any:
+        return '성별 무관';
+      case GenderFilter.maleOnly:
+        return '남성만';
+      case GenderFilter.femaleOnly:
+        return '여성만';
     }
   }
 
   String _ageLabel(AgeFilter f) {
     switch (f) {
-      case AgeFilter.any: return '연령 무관';
-      case AgeFilter.twenties: return '20대';
-      case AgeFilter.thirties: return '30대';
-      case AgeFilter.mixed: return '혼합';
+      case AgeFilter.any:
+        return '연령 무관';
+      case AgeFilter.teens:
+        return '10대';
+      case AgeFilter.twenties:
+        return '20대';
+      case AgeFilter.thirties:
+        return '30대';
     }
   }
 
@@ -524,8 +535,8 @@ class _GatherCardState extends State<_GatherCard> {
     final confirm = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             title: const Text('모임 삭제'),
             content: const Text('정말 이 모임을 삭제하시겠습니까?'),
             actions: [
@@ -547,8 +558,8 @@ class _GatherCardState extends State<_GatherCard> {
           .doc(widget.post.id)
           .delete();
       if (context.mounted)
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('모임이 삭제되었습니다.')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('모임이 삭제되었습니다.')));
     } catch (e) {
       if (context.mounted)
         ScaffoldMessenger.of(context)
@@ -577,12 +588,12 @@ class _GatherDetail extends StatelessWidget {
     switch (f) {
       case AgeFilter.any:
         return '연령 무관';
+      case AgeFilter.teens:
+        return '10대';
       case AgeFilter.twenties:
         return '20대';
       case AgeFilter.thirties:
         return '30대';
-      case AgeFilter.mixed:
-        return '혼합';
     }
   }
 
@@ -882,8 +893,8 @@ class _CreateGatherSheet extends StatefulWidget {
 }
 
 class _CreateGatherSheetState extends State<_CreateGatherSheet> {
-  GenderFilter _genderFilter = GenderFilter.any;
-  AgeFilter _ageFilter = AgeFilter.any;
+  bool _genderOnly = false;
+  bool _ageOnly = false;
   int _maxMembers = 2;
   final _titleController = TextEditingController();
   final _descController = TextEditingController();
@@ -921,6 +932,22 @@ class _CreateGatherSheetState extends State<_CreateGatherSheet> {
 
     try {
       final userStore = UserStoreProvider.of(context);
+      final resolvedGender = !_genderOnly
+          ? GenderFilter.any
+          : (userStore.gender == '남성'
+              ? GenderFilter.maleOnly
+              : GenderFilter.femaleOnly);
+
+      final resolvedAge = !_ageOnly
+          ? AgeFilter.any
+          : (userStore.ageCategory == 'teens'
+              ? AgeFilter.teens
+              : userStore.ageCategory == 'twenties'
+                  ? AgeFilter.twenties
+                  : userStore.ageCategory == 'thirties'
+                      ? AgeFilter.thirties
+                      : AgeFilter.any);
+
       final firestore = FirebaseFirestore.instance;
 
       final DateTime now = DateTime.now();
@@ -937,8 +964,8 @@ class _CreateGatherSheetState extends State<_CreateGatherSheet> {
         'authorName': userStore.name,
         'authorUid': userStore.uid,
         'location': userStore.location,
-        'genderFilter': _genderFilter.name,
-        'ageFilter': _ageFilter.name,
+        'genderFilter': resolvedGender.name,
+        'ageFilter': resolvedAge.name,
         'category': _selectedCategory,
         'members': [userStore.uid],
         'createdAt': FieldValue.serverTimestamp(),
@@ -1190,34 +1217,20 @@ class _CreateGatherSheetState extends State<_CreateGatherSheet> {
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
-                    children: GenderFilter.values.map((f) {
-                      final labels = ['성별 무관', '남성만', '여성만'];
-                      return GestureDetector(
-                        onTap: () => setState(() => _genderFilter = f),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: _genderFilter == f
-                                ? AppColors.gatherColor
-                                : AppColors.surface,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                                color: _genderFilter == f
-                                    ? AppColors.gatherColor
-                                    : AppColors.divider),
-                          ),
-                          child: Text(labels[f.index],
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: _genderFilter == f
-                                    ? Colors.white
-                                    : AppColors.textSecondary,
-                              )),
-                        ),
-                      );
-                    }).toList(),
+                    children: [
+                      _FilterChip(
+                        label: '성별 무관',
+                        isSelected: !_genderOnly,
+                        color: AppColors.gatherColor,
+                        onTap: () => setState(() => _genderOnly = false),
+                      ),
+                      _FilterChip(
+                        label: '내 성별만',
+                        isSelected: _genderOnly,
+                        color: AppColors.gatherColor,
+                        onTap: () => setState(() => _genderOnly = true),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 16),
                   const Text('연령 제한',
@@ -1228,34 +1241,20 @@ class _CreateGatherSheetState extends State<_CreateGatherSheet> {
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
-                    children: AgeFilter.values.map((f) {
-                      final labels = ['연령 무관', '20대', '30대', '혼합'];
-                      return GestureDetector(
-                        onTap: () => setState(() => _ageFilter = f),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: _ageFilter == f
-                                ? AppColors.gatherColor
-                                : AppColors.surface,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                                color: _ageFilter == f
-                                    ? AppColors.gatherColor
-                                    : AppColors.divider),
-                          ),
-                          child: Text(labels[f.index],
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: _ageFilter == f
-                                    ? Colors.white
-                                    : AppColors.textSecondary,
-                              )),
-                        ),
-                      );
-                    }).toList(),
+                    children: [
+                      _FilterChip(
+                        label: '연령 무관',
+                        isSelected: !_ageOnly,
+                        color: AppColors.gatherColor,
+                        onTap: () => setState(() => _ageOnly = false),
+                      ),
+                      _FilterChip(
+                        label: '내 또래만',
+                        isSelected: _ageOnly,
+                        color: AppColors.gatherColor,
+                        onTap: () => setState(() => _ageOnly = true),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 24),
                   const Text('설명 (선택)',
@@ -1472,6 +1471,43 @@ class _EditGatherSheetState extends State<_EditGatherSheet> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _FilterChip extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _FilterChip({
+    required this.label,
+    required this.isSelected,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? color : AppColors.surface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: isSelected ? color : AppColors.divider),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: isSelected ? Colors.white : AppColors.textSecondary,
+          ),
+        ),
       ),
     );
   }

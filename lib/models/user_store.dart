@@ -10,6 +10,7 @@ class UserStore extends ChangeNotifier {
   String _homeAddress = '';
   double _avgRating = 0.0;
   int _locationScope = 0; // 0=자동(최대), 몇 번째 파트까지 쓸지
+  String _currentChatRoomId = '';
 
   String get name => _name;
   String get location => _location;
@@ -21,6 +22,7 @@ class UserStore extends ChangeNotifier {
   double get avgRating => _avgRating;
   int get locationScope => _locationScope;
   bool get isSignedUp => _name.isNotEmpty && _location.isNotEmpty;
+  String get currentChatRoomId => _currentChatRoomId;
 
   // 실제 필터로 쓸 location prefix (scope에 따라 1~N 파트)
   String get filterLocation {
@@ -35,6 +37,7 @@ class UserStore extends ChangeNotifier {
     try {
       final birth = DateTime.parse(_birthDate);
       final age = DateTime.now().year - birth.year;
+      if (age >= 10 && age < 20) return 'teens';
       if (age >= 20 && age < 30) return 'twenties';
       if (age >= 30 && age < 40) return 'thirties';
       return 'other';
@@ -87,6 +90,11 @@ class UserStore extends ChangeNotifier {
 
   void setAvgRating(double avgRating) {
     _avgRating = avgRating;
+    notifyListeners();
+  }
+
+  void setCurrentChatRoomId(String id) {
+    _currentChatRoomId = id;
     notifyListeners();
   }
 }

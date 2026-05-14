@@ -11,6 +11,9 @@ import 'chat_list_screen.dart';
 import 'notification_screen.dart';
 import 'signup_screen.dart';
 import 'mypage_screen.dart';
+import '../utils/in_app_notification_service.dart';
+import 'dart:async';
+import '../models/models.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -91,8 +94,97 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 // ─── 홈 탭 ───────────────────────────────────────────────────────
-class _HomeTab extends StatelessWidget {
+class _HomeTab extends StatefulWidget {
   const _HomeTab();
+
+  @override
+  State<_HomeTab> createState() => _HomeTabState();
+}
+
+class _HomeTabState extends State<_HomeTab> {
+  final List<StreamSubscription> _subscriptions = [];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _subscribeToMessages();
+    });
+  }
+
+  @override
+  void dispose() {
+    for (final sub in _subscriptions) {
+      sub.cancel();
+    }
+    super.dispose();
+  }
+
+  void _subscribeToMessages() {
+    final store = UserStoreProvider.of(context);
+    final uid = store.uid;
+    if (uid.isEmpty) return;
+
+    FirebaseFirestore.instance
+        .collection('chatRooms')
+        .where('members', arrayContains: uid)
+        .snapshots()
+        .listen((snapshot) {
+      for (final doc in snapshot.docs) {
+        final roomId = doc.id;
+        final roomData = doc.data();
+        final roomTitle = roomData['title'] as String? ?? '';
+        final roomType = roomData['type'] as String? ?? '';
+        final roomEmoji = switch (roomType) {
+          'groupBuy' => '🛒',
+          'exchange' => '🔄',
+          'gather'   => '👥',
+          _          => '💬',
+        };
+
+        final sub = FirebaseFirestore.instance
+            .collection('chatRooms')
+            .doc(roomId)
+            .collection('messages')
+            .orderBy('time', descending: true)
+            .limit(1)
+            .snapshots()
+            .listen((msgSnap) {
+          if (msgSnap.docs.isEmpty) return;
+          final msg = msgSnap.docs.first.data();
+          final senderUid = msg['senderUid'] as String? ?? '';
+          final senderName = msg['senderName'] as String? ?? '';
+          final text = msg['text'] as String? ?? '';
+          final time = (msg['time'] as Timestamp?)?.toDate();
+
+          if (senderUid == uid) return;
+          if (senderName == 'system') return;
+          if (store.currentChatRoomId == roomId) return;
+          if (time == null) return;
+          if (DateTime.now().difference(time).inSeconds > 3) return;
+
+          if (!mounted) return;
+          InAppNotificationService.show(
+            context: context,
+            title: roomTitle,
+            message: '$senderName: $text',
+            roomId: roomId,
+            emoji: roomEmoji,
+            onTap: () {
+              Navigator.of(context, rootNavigator: true).push(
+                MaterialPageRoute(
+                  builder: (_) => ChatScreen(
+                    room: ChatRoom.fromMap(roomData, roomId),
+                  ),
+                ),
+              );
+            },
+          );
+        });
+        _subscriptions.add(sub);
+      }
+    });
+  }
 
   Future<void> _showResetDialog(BuildContext context) async {
     final confirm = await showDialog<bool>(
@@ -190,7 +282,8 @@ class _HomeTab extends StatelessWidget {
               children: [
                 Center(
                   child: Container(
-                    width: 40, height: 4,
+                    width: 40,
+                    height: 4,
                     decoration: BoxDecoration(
                       color: AppColors.divider,
                       borderRadius: BorderRadius.circular(2),
@@ -199,15 +292,18 @@ class _HomeTab extends StatelessWidget {
                 ),
                 const SizedBox(height: 20),
                 const Text('내 동네 범위 설정',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                    style:
+                        TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
                 const SizedBox(height: 4),
                 const Text('선택한 범위 내 이웃의 글을 볼 수 있어요',
-                    style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                    style: TextStyle(
+                        fontSize: 13, color: AppColors.textSecondary)),
                 const SizedBox(height: 24),
 
                 // 현재 주소 표시
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   decoration: BoxDecoration(
                     color: AppColors.background,
                     borderRadius: BorderRadius.circular(12),
@@ -430,7 +526,8 @@ class _HomeTab extends StatelessWidget {
                       icon: const Icon(Icons.person_outline),
                       onPressed: () {
                         Navigator.of(context, rootNavigator: true).push(
-                          MaterialPageRoute(builder: (_) => const MyPageScreen()),
+                          MaterialPageRoute(
+                              builder: (_) => const MyPageScreen()),
                         );
                       },
                       color: AppColors.textSecondary,
@@ -534,12 +631,76 @@ class _HomeBanner extends StatelessWidget {
                   ),
                 ),
                 SizedBox(height: 12),
-                _PointBadge(),
+                const _PointBadge(),
+                const SizedBox(height: 8), // ← 추가
+                const _AdBanner(),
               ],
             ),
           ),
           const Text('🏘️', style: TextStyle(fontSize: 60)),
         ],
+      ),
+    );
+  }
+}
+
+class _AdBanner extends StatelessWidget {
+  const _AdBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Text('🎁 광고 포인트',
+                style: TextStyle(fontWeight: FontWeight.w700)),
+            content: const Text('광고 서비스 준비 중이에요!\n곧 광고를 보고 포인트를 얻을 수 있어요 😊'),
+            actions: [
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx),
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary),
+                child: const Text('확인'),
+              ),
+            ],
+          ),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.2),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.white.withOpacity(0.4)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            Icon(Icons.play_circle_outline, size: 16, color: Colors.white),
+            SizedBox(width: 6),
+            Text(
+              '광고 보고 포인트 받기',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+            ),
+            SizedBox(width: 4),
+            Text(
+              '+10P',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFFFFE066),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -688,8 +849,10 @@ class _RecentGroupBuy extends StatelessWidget {
             final bOnLeft = bMax - bCurrent == 1;
             if (aOnLeft && !bOnLeft) return -1;
             if (!aOnLeft && bOnLeft) return 1;
-            final aTime = (aD['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now();
-            final bTime = (bD['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now();
+            final aTime =
+                (aD['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now();
+            final bTime =
+                (bD['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now();
             return aTime.compareTo(bTime);
           });
 
@@ -815,8 +978,10 @@ class _TodayGather extends StatelessWidget {
                 loc.startsWith(filterLoc);
           }).toList()
             ..sort((a, b) {
-              final aTime = ((a.data() as Map)['meetTime'] as Timestamp).toDate();
-              final bTime = ((b.data() as Map)['meetTime'] as Timestamp).toDate();
+              final aTime =
+                  ((a.data() as Map)['meetTime'] as Timestamp).toDate();
+              final bTime =
+                  ((b.data() as Map)['meetTime'] as Timestamp).toDate();
               return aTime.compareTo(bTime);
             });
 
@@ -826,7 +991,8 @@ class _TodayGather extends StatelessWidget {
               decoration: BoxDecoration(
                 color: AppColors.surface,
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: AppColors.gatherColor.withOpacity(0.3)),
+                border:
+                    Border.all(color: AppColors.gatherColor.withOpacity(0.3)),
               ),
               child: const Center(
                 child: Text('오늘 예정된 모임이 없어요',
@@ -877,8 +1043,7 @@ class _TodayGather extends StatelessWidget {
                             Text(
                               '📍 ${data['place'] ?? ''}',
                               style: const TextStyle(
-                                  fontSize: 12,
-                                  color: AppColors.textSecondary),
+                                  fontSize: 12, color: AppColors.textSecondary),
                             ),
                           ],
                         ),
@@ -906,8 +1071,7 @@ class _TodayGather extends StatelessWidget {
                           Text(
                             '${data['currentMembers']}/${data['maxMembers']}명',
                             style: const TextStyle(
-                                fontSize: 12,
-                                color: AppColors.textSecondary),
+                                fontSize: 12, color: AppColors.textSecondary),
                           ),
                         ],
                       ),

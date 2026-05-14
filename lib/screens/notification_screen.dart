@@ -299,9 +299,9 @@ class _RatingDialogState extends State<_RatingDialog> {
       }
 
       ratings[widget.uid] = _rating;
-      final maxParticipants = (data['maxParticipants'] ?? 2) as int;
+      final currentParticipants = (data['currentParticipants'] ?? 2) as int; // maxParticipants → currentParticipants
       final authorUid = data['authorUid'] as String? ?? '';
-      final expectedRaters = maxParticipants - 1;
+      final expectedRaters = currentParticipants - 1;
       final allRated = ratings.length >= expectedRaters;
 
       await firestore.collection('posts').doc(widget.postId).update({
@@ -321,27 +321,25 @@ class _RatingDialogState extends State<_RatingDialog> {
         else if (avg >= 3.0) points = 10;
         else points = 0;
 
-        if (points > 0) {
-          await firestore.runTransaction((tx) async {
-            final userRef = firestore.collection('users').doc(authorUid);
-            final userSnap = await tx.get(userRef);
-            final currentPoints = (userSnap.data()?['points'] ?? 0) as int;
-            final totalSum =
-                ((userSnap.data()?['totalRatingSum'] ?? 0) as num).toDouble();
-            final totalCount =
-                (userSnap.data()?['totalRatingCount'] ?? 0) as int;
-            tx.update(userRef, {
-              'points': currentPoints + points,
-              'totalRatingSum': totalSum + avg,
-              'totalRatingCount': totalCount + 1,
-              'avgRating': (totalSum + avg) / (totalCount + 1),
-            });
-            tx.update(
-              firestore.collection('posts').doc(widget.postId),
-              {'ratingAvg': avg},
-            );
+        await firestore.runTransaction((tx) async {
+          final userRef = firestore.collection('users').doc(authorUid);
+          final userSnap = await tx.get(userRef);
+          final currentPoints = (userSnap.data()?['points'] ?? 0) as int;
+          final totalSum =
+              ((userSnap.data()?['totalRatingSum'] ?? 0) as num).toDouble();
+          final totalCount =
+              (userSnap.data()?['totalRatingCount'] ?? 0) as int;
+          tx.update(userRef, {
+            if (points > 0) 'points': currentPoints + points,
+            'totalRatingSum': totalSum + avg,
+            'totalRatingCount': totalCount + 1,
+            'avgRating': (totalSum + avg) / (totalCount + 1),
           });
-        }
+          tx.update(
+            firestore.collection('posts').doc(widget.postId),
+            {'ratingAvg': avg},
+          );
+        });
       }
 
       if (mounted) {

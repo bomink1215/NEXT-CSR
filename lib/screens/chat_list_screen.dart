@@ -277,6 +277,12 @@ class ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
+
+    // 채팅방 입장 시 현재 채팅방 ID 설정
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      UserStoreProvider.of(context).setCurrentChatRoomId(widget.room.id);
+    });
+
     // chatRoom 실시간 구독 → lastRead 변화 감지
     FirebaseFirestore.instance
         .collection('chatRooms')
@@ -308,6 +314,8 @@ class ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
+    // 채팅방 퇴장 시 초기화
+    UserStoreProvider.of(context).setCurrentChatRoomId('');
     _ctrl.dispose();
     _focusNode.dispose();
     super.dispose();
@@ -711,6 +719,7 @@ class ChatScreenState extends State<ChatScreen> {
       ),
       body: Column(
         children: [
+          _PostInfoBanner(room: widget.room),
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
@@ -940,4 +949,124 @@ class _MessageBubble extends StatelessWidget {
       ),
     );
   }
+}
+
+class _PostInfoBanner extends StatelessWidget {
+  final ChatRoom room;
+  const _PostInfoBanner({required this.room});
+
+  Color get _color {
+    switch (room.type) {
+      case ChatRoomType.groupBuy: return AppColors.buyColor;
+      case ChatRoomType.exchange: return AppColors.exchangeColor;
+      case ChatRoomType.gather: return AppColors.gatherColor;
+    }
+  }
+
+  String get _postId {
+    switch (room.type) {
+      case ChatRoomType.exchange:
+        return ''; // exchange는 chatRooms에서 postId 따로 가져와야 함
+      default:
+        return room.id;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // 물물교환은 chatRooms에서 postId 가져오기
+    if (room.type == ChatRoomType.exchange) {
+      return StreamBuilder<DocumentSnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('chatRooms')
+            .doc(room.id)
+            .snapshots(),
+        builder: (context, snap) {
+          if (!snap.hasData) return const SizedBox.shrink();
+          final chatData = snap.data!.data() as Map<String, dynamic>? ?? {};
+          final postId = chatData['postId'] as String? ?? '';
+          if (postId.isEmpty) return const SizedBox.shrink();
+          return _buildBannerFromPost(postId);
+        },
+      );
+    }
+    return _buildBannerFromPost(room.id);
+  }
+
+  Widget _buildBannerFromPost(String postId) {
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('posts')
+          .doc(postId)
+          .snapshots(),
+      builder: (context, snap) {
+        if (!snap.hasData || !snap.data!.exists) return const SizedBox.shrink();
+        final data = snap.data!.data() as Map<String, dynamic>;
+
+        String? line1;
+        String? line2;
+
+        if (room.type == ChatRoomType.groupBuy) {
+          final unitPrice = data['unitPrice'] ?? 0;
+          final meetingPlace = data['meetingPlace'] as String? ?? '';
+          line1 = '💰 1인 부담: ${_formatPrice(unitPrice)}원';
+          if (meetingPlace.isNotEmpty) line2 = '📍 거래 희망 장소: $meetingPlace';
+        } else if (room.type == ChatRoomType.exchange) {
+          final meetingPlace = data['meetingPlace'] as String? ?? '';
+          if (meetingPlace.isNotEmpty) line1 = '📍 거래 희망 장소: $meetingPlace';
+        } else if (room.type == ChatRoomType.gather) {
+          final meetTime = (data['meetTime'] as Timestamp?)?.toDate();
+          final place = data['place'] as String? ?? '';
+          if (meetTime != null) {
+            line1 = '🕐 모임 시간: ${meetTime.month}/${meetTime.day} ${meetTime.hour}:${meetTime.minute.toString().padLeft(2, '0')}';
+          }
+          if (place.isNotEmpty) line2 = '📍 장소: $place';
+        }
+
+        if (line1 == null && line2 == null) return const SizedBox.shrink();
+
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: _color.withOpacity(0.08),
+            border: Border(
+              bottom: BorderSide(color: _color.withOpacity(0.2)),
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.push_pin_outlined, size: 14, color: _color),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (line1 != null)
+                      Text(line1,
+                          style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: _color)),
+                    if (line2 != null) ...[
+                      const SizedBox(height: 2),
+                      Text(line2,
+                          style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: _color)),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  String _formatPrice(int price) => price
+      .toString()
+      .replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+$)'), (m) => '${m[1]},');
 }

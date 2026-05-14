@@ -221,7 +221,7 @@ class GatherPost {
 
 enum GenderFilter { any, maleOnly, femaleOnly }
 
-enum AgeFilter { any, twenties, thirties, mixed }
+enum AgeFilter { any, teens, twenties, thirties }
 
 // ─── 채팅 모델 ───────────────────────────────────────────────────
 class ChatRoom {
