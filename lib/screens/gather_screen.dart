@@ -64,6 +64,10 @@ class _GatherScreenState extends State<GatherScreen> {
           // 사용자 성별/나이대에 맞는 모임만 표시
           final profileDocs = allDocs.where((doc) {
             final d = doc.data() as Map<String, dynamic>;
+            
+            final meetTime = (d['meetTime'] as Timestamp?)?.toDate();
+            if (meetTime != null && meetTime.isBefore(DateTime.now())) return false;
+  
             final gf = d['genderFilter'] ?? 'any';
             final af = d['ageFilter'] ?? 'any';
             if (gf == 'maleOnly' && userGender != '남성') return false;

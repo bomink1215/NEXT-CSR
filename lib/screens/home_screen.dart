@@ -369,32 +369,44 @@ class _HomeTab extends StatelessWidget {
                       ),
                     ),
                     const Spacer(),
-                    Stack(
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.notifications_outlined),
-                          onPressed: () {
-                            Navigator.of(context, rootNavigator: true).push(
-                              MaterialPageRoute(
-                                builder: (_) => const NotificationScreen(),
-                              ),
-                            );
-                          },
-                          color: AppColors.textPrimary,
-                        ),
-                        Positioned(
-                          top: 8,
-                          right: 8,
-                          child: Container(
-                            width: 8,
-                            height: 8,
-                            decoration: const BoxDecoration(
-                              color: AppColors.primary,
-                              shape: BoxShape.circle,
+                    StreamBuilder<QuerySnapshot>(
+                      stream: FirebaseFirestore.instance
+                          .collection('notifications')
+                          .doc(UserStoreProvider.of(context).uid)
+                          .collection('items')
+                          .where('isRead', isEqualTo: false)
+                          .snapshots(),
+                      builder: (context, snap) {
+                        final hasUnread = (snap.data?.docs.length ?? 0) > 0;
+                        return Stack(
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.notifications_outlined),
+                              onPressed: () {
+                                Navigator.of(context, rootNavigator: true).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => const NotificationScreen(),
+                                  ),
+                                );
+                              },
+                              color: AppColors.textPrimary,
                             ),
-                          ),
-                        ),
-                      ],
+                            if (hasUnread)
+                              Positioned(
+                                top: 8,
+                                right: 8,
+                                child: Container(
+                                  width: 8,
+                                  height: 8,
+                                  decoration: const BoxDecoration(
+                                    color: AppColors.primary,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        );
+                      },
                     ),
                     IconButton(
                       icon: const Icon(Icons.delete_sweep_outlined),

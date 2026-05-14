@@ -541,7 +541,7 @@ class _SignupFormState extends State<_SignupForm> {
         const SizedBox(height: 8),
         TextField(
           controller: _nameController,
-          decoration: _inputDeco(hint: '예) 이예주', icon: Icons.badge_outlined),
+          decoration: _inputDeco(hint: '', icon: Icons.badge_outlined),
         ),
         const SizedBox(height: 16),
 
