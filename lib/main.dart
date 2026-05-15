@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:provider/provider.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -23,27 +24,42 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  // 백그라운드 메시지 핸들러 등록
-  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+  if (kIsWeb) {
+    // 웹 푸시 알림 권한 요청 — 앱 시작을 블로킹하지 않도록 비동기 처리
+    Future(() async {
+      try {
+        await FirebaseMessaging.instance.requestPermission(
+          alert: true,
+          badge: true,
+          sound: true,
+        );
+      } catch (_) {}
+    });
+  }
 
-  // 로컬 알림 초기화
-  const AndroidInitializationSettings androidSettings =
-      AndroidInitializationSettings('@mipmap/ic_launcher');
-  const DarwinInitializationSettings iosSettings =
-      DarwinInitializationSettings();
-  await flutterLocalNotificationsPlugin.initialize(
-    const InitializationSettings(
-      android: androidSettings,
-      iOS: iosSettings,
-    ),
-  );
+  if (!kIsWeb) {
+    // 백그라운드 메시지 핸들러 등록 (웹 미지원)
+    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
-  // 알림 권한 요청
-  await FirebaseMessaging.instance.requestPermission(
-    alert: true,
-    badge: true,
-    sound: true,
-  );
+    // 로컬 알림 초기화 (웹 미지원)
+    const AndroidInitializationSettings androidSettings =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
+    const DarwinInitializationSettings iosSettings =
+        DarwinInitializationSettings();
+    await flutterLocalNotificationsPlugin.initialize(
+      const InitializationSettings(
+        android: androidSettings,
+        iOS: iosSettings,
+      ),
+    );
+
+    // 알림 권한 요청
+    await FirebaseMessaging.instance.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
+  }
 
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(

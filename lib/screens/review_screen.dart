@@ -156,20 +156,9 @@ class _ReviewScreenState extends State<ReviewScreen> {
                 }
 
                 final docs = snapshot.data!.docs;
-                final filterLoc = store.filterLocation;
-                final locationDocs = docs.where((doc) {
-                  final data = doc.data() as Map<String, dynamic>;
-                  final loc = (data['location'] as String? ?? '');
-                  if (loc.isEmpty || filterLoc.isEmpty) return true;
-                  if (loc.startsWith(filterLoc)) return true;
-                  // 하위 호환: 이전 글은 짧은 형식으로 저장됨
-                  return loc.split(' ')
-                      .where((p) => p.length >= 2)
-                      .any((p) => filterLoc.contains(p));
-                }).toList();
                 final filtered = _searchQuery.isEmpty
-                    ? locationDocs
-                    : locationDocs.where((doc) {
+                    ? docs
+                    : docs.where((doc) {
                         final data = doc.data() as Map<String, dynamic>;
                         final q = _searchQuery.toLowerCase();
                         return (data['buildingName'] ?? '').toString().toLowerCase().contains(q) ||

@@ -91,6 +91,36 @@ class _GroupBuyScreenState extends State<GroupBuyScreen> {
       ),
       body: Column(
         children: [
+          // 안내 배너
+          Container(
+            margin: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  AppColors.buyColor.withOpacity(0.1),
+                  AppColors.buyColor.withOpacity(0.05),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: const [
+                Text('🛒', style: TextStyle(fontSize: 20)),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    '이웃과 함께 사면 더 저렴해요!\n공동구매로 배송비·수량 부담 줄이기',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: AppColors.textSecondary,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
           // 검색창
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
@@ -200,10 +230,19 @@ class _GroupBuyScreenState extends State<GroupBuyScreen> {
                   final loc = (data['location'] as String? ?? '');
                   if (loc.isEmpty || filterLoc.isEmpty) return true;
                   if (loc.startsWith(filterLoc)) return true;
-                  // 하위 호환: 이전 글은 "안암동", "성북구 안암동" 등 짧은 형식으로 저장됨
-                  return loc.split(' ')
-                      .where((p) => p.length >= 2)
-                      .any((p) => filterLoc.contains(p));
+                  final locParts = loc.split(' ').where((p) => p.isNotEmpty).toList();
+                  final filterParts = filterLoc.split(' ').where((p) => p.isNotEmpty).toList();
+                  // 같은 형식(첫 파트 동일): startsWith 실패 = 다른 지역 → 숨김
+                  if (locParts.isNotEmpty && locParts[0] == filterParts[0]) return false;
+                  // 이전 형식: 필터 수준에 따라 처리
+                  if (filterParts.length == 1) return true; // 시/도 전체 → 모두 표시
+                  if (filterParts.length == 2) {
+                    // 구 수준: 동 이름만 있는 이전 글은 구 특정 불가 → 표시
+                    if (locParts.length < 2) return true;
+                    return locParts.contains(filterParts.last);
+                  }
+                  // 동 수준: 동 이름이 정확히 일치해야 함
+                  return locParts.contains(filterParts.last);
                 }).toList();
                 final categoryDocs = _selectedFilter == '전체'
                     ? locationDocs

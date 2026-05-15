@@ -439,6 +439,7 @@ class _HomeTabState extends State<_HomeTab> {
             floating: true,
             backgroundColor: AppColors.surface,
             elevation: 0,
+            toolbarHeight: 80,
             flexibleSpace: FlexibleSpaceBar(
               background: Container(
                 color: AppColors.surface,
@@ -478,6 +479,14 @@ class _HomeTabState extends State<_HomeTab> {
                             style: const TextStyle(
                               fontSize: 12,
                               color: AppColors.textSecondary,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          const Text(
+                            '여기서 내 동네 범위를 설정할 수 있어요!',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: AppColors.textHint,
                             ),
                           ),
                         ],
@@ -556,8 +565,7 @@ class _HomeTabState extends State<_HomeTab> {
                 ),
               ),
             ),
-            expandedHeight: 70,
-            toolbarHeight: 70,
+            expandedHeight: 80,
           ),
 
           // ── 배너 ──

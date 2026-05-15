@@ -81,8 +81,6 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
                 ],
               ),
               borderRadius: BorderRadius.circular(12),
-              border:
-                  Border.all(color: AppColors.exchangeColor.withOpacity(0.2)),
             ),
             child: Row(
               children: const [
@@ -164,10 +162,15 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
                     final loc = (data['location'] as String? ?? '');
                     if (loc.isEmpty || filterLoc.isEmpty) return true;
                     if (loc.startsWith(filterLoc)) return true;
-                    // 하위 호환: 이전 글은 짧은 형식으로 저장됨
-                    return loc.split(' ')
-                        .where((p) => p.length >= 2)
-                        .any((p) => filterLoc.contains(p));
+                    final locParts = loc.split(' ').where((p) => p.isNotEmpty).toList();
+                    final filterParts = filterLoc.split(' ').where((p) => p.isNotEmpty).toList();
+                    if (locParts.isNotEmpty && locParts[0] == filterParts[0]) return false;
+                    if (filterParts.length == 1) return true;
+                    if (filterParts.length == 2) {
+                      if (locParts.length < 2) return true;
+                      return locParts.contains(filterParts.last);
+                    }
+                    return locParts.contains(filterParts.last);
                   }).toList();
 
                   final filteredDocs = (_searchQuery.isEmpty
