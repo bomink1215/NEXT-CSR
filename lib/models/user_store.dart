@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart';
 
 class UserStore extends ChangeNotifier {
   String _name = '';
@@ -119,9 +120,6 @@ class UserStoreProvider extends InheritedNotifier<UserStore> {
   }) : super(notifier: store);
 
   static UserStore of(BuildContext context) {
-    final provider =
-        context.dependOnInheritedWidgetOfExactType<UserStoreProvider>();
-    assert(provider != null, 'UserStoreProvider를 찾을 수 없습니다.');
-    return provider!.notifier!;
+    return context.read<UserStore>();
   }
 }

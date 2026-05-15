@@ -27,19 +27,22 @@ class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
   final List<StreamSubscription> _subscriptions = [];
   final Map<String, String> _lastMessageIds = {};
-
-  final List<Widget> _screens = const [
-    _HomeTab(),
-    GroupBuyScreen(),
-    ExchangeScreen(),
-    ReviewScreen(),
-    GatherScreen(),
-    ChatListScreen(),
-  ];
+  late final List<Widget> _screens;
 
   @override
   void initState() {
     super.initState();
+
+    InAppNotificationService.reset();
+
+    _screens = [
+      const _HomeTab(),
+      const GroupBuyScreen(),
+      const ExchangeScreen(),
+      const ReviewScreen(),
+      const GatherScreen(),
+      const ChatListScreen(),
+    ];
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _subscribeToMessages();
     });
@@ -431,9 +434,9 @@ class _HomeTabState extends State<_HomeTab> {
   Widget build(BuildContext context) {
     final store = UserStoreProvider.of(context);
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: CustomScrollView(
+    return ColoredBox(
+      color: AppColors.background,
+      child: CustomScrollView(
         slivers: [
           // ── 앱바 ──
           SliverAppBar(
@@ -755,10 +758,14 @@ class _FeatureGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final features = [
-      _Feature('공동구매', '🛒', AppColors.buyColor, AppColors.buyColorLight, const GroupBuyScreen()),
-      _Feature('물물교환', '🔄', AppColors.exchangeColor, AppColors.exchangeColorLight, const ExchangeScreen()),
-      _Feature('원룸리뷰', '🏠', AppColors.reviewColor, AppColors.reviewColorLight, const ReviewScreen()),
-      _Feature('모임 찾기', '👥', AppColors.gatherColor, AppColors.gatherColorLight, const GatherScreen()),
+      _Feature('공동구매', '🛒', AppColors.buyColor, AppColors.buyColorLight,
+          const GroupBuyScreen()),
+      _Feature('물물교환', '🔄', AppColors.exchangeColor,
+          AppColors.exchangeColorLight, const ExchangeScreen()),
+      _Feature('원룸리뷰', '🏠', AppColors.reviewColor, AppColors.reviewColorLight,
+          const ReviewScreen()),
+      _Feature('모임 찾기', '👥', AppColors.gatherColor, AppColors.gatherColorLight,
+          const GatherScreen()),
     ];
 
     return Padding(

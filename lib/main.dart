@@ -9,6 +9,7 @@ import 'models/user_store.dart';
 import 'screens/signup_screen.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
+import 'screens/auth_gate.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -79,15 +80,11 @@ class GatchiSapsidaApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final store = UserStore();
-    return UserStoreProvider(
-      store: store,
-      child: MaterialApp(
+    return MaterialApp(
         title: '같이삽시다',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.theme,
-        home: const SignupScreen(),
-      ),
-    );
+        home: const AuthGate(),
+      );
   }
 }

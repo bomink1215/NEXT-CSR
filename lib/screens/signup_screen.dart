@@ -7,6 +7,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../utils/rating_checker.dart';
 import '../utils/location_picker.dart';
 import '../utils/notification_service.dart';
+import 'package:provider/provider.dart';
+import 'auth_gate.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -22,61 +24,10 @@ class _SignupScreenState extends State<SignupScreen> {
   @override
   void initState() {
     super.initState();
-    _tryAutoLogin();
-  }
-
-  Future<void> _tryAutoLogin() async {
-    final prefs = await SharedPreferences.getInstance();
-    final savedUid = prefs.getString('saved_uid');
-    if (savedUid == null || savedUid.isEmpty) {
-      if (mounted) setState(() => _autoLoginChecked = true);
-      return;
-    }
-
-    try {
-      final doc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(savedUid)
-          .get();
-      if (!doc.exists || !mounted) {
-        setState(() => _autoLoginChecked = true);
-        return;
-      }
-      final data = doc.data()!;
-      UserStoreProvider.of(context).signUp(
-        name: data['name'] ?? '',
-        gender: data['gender'] ?? '',
-        birthDate: data['birthDate'] ?? '',
-        location: data['location'] ?? '',
-        uid: savedUid,
-        points: (data['points'] ?? 0) as int,
-        homeAddress: data['homeAddress'] ?? '',
-        avgRating: ((data['avgRating'] ?? 0.0) as num).toDouble(),
-      );
-      try {
-        await NotificationService.saveFcmToken(savedUid);
-        NotificationService.setupForegroundNotification();
-      } catch (_) {}
-      if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-      );
-    } catch (_) {
-      if (mounted) setState(() => _autoLoginChecked = true);
-    }
   }
 
   @override
   Widget build(BuildContext context) {
-    // 자동 로그인 확인 중엔 스플래시 표시
-    if (!_autoLoginChecked) {
-      return const Scaffold(
-        backgroundColor: AppColors.background,
-        body: Center(
-          child: CircularProgressIndicator(color: AppColors.primary),
-        ),
-      );
-    }
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -167,10 +118,7 @@ class _SignupScreenState extends State<SignupScreen> {
                 ],
               ),
               const SizedBox(height: 32),
-              if (_isLoginMode)
-                _LoginForm()
-              else
-                _SignupForm(),
+              if (_isLoginMode) _LoginForm() else _SignupForm(),
             ],
           ),
         ),
@@ -201,7 +149,8 @@ class _LoginFormState extends State<_LoginForm> {
   }
 
   Future<void> _login() async {
-    if (_idController.text.trim().isEmpty || _pwController.text.trim().isEmpty) {
+    if (_idController.text.trim().isEmpty ||
+        _pwController.text.trim().isEmpty) {
       _showError('아이디와 비밀번호를 입력해주세요.');
       return;
     }
@@ -228,16 +177,16 @@ class _LoginFormState extends State<_LoginForm> {
       }
 
       if (!mounted) return;
-      UserStoreProvider.of(context).signUp(
-        name: data['name'] ?? '',
-        gender: data['gender'] ?? '',
-        birthDate: data['birthDate'] ?? '',
-        location: data['location'] ?? '',
-        uid: snap.docs.first.id,
-        points: (data['points'] ?? 0) as int,
-        homeAddress: data['homeAddress'] ?? '',
-        avgRating: ((data['avgRating'] ?? 0.0) as num).toDouble(),       
-      );
+      context.read<UserStore>().signUp(
+            name: data['name'] ?? '',
+            gender: data['gender'] ?? '',
+            birthDate: data['birthDate'] ?? '',
+            location: data['location'] ?? '',
+            uid: snap.docs.first.id,
+            points: (data['points'] ?? 0) as int,
+            homeAddress: data['homeAddress'] ?? '',
+            avgRating: ((data['avgRating'] ?? 0.0) as num).toDouble(),
+          );
 
       try {
         await NotificationService.saveFcmToken(snap.docs.first.id);
@@ -250,8 +199,9 @@ class _LoginFormState extends State<_LoginForm> {
 
       if (!mounted) return;
       RatingChecker.checkAndComplete();
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
+      Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const AuthGate()),
+      (route) => false,
       );
     } catch (e) {
       if (mounted)
@@ -288,7 +238,8 @@ class _LoginFormState extends State<_LoginForm> {
         const SizedBox(height: 8),
         TextField(
           controller: _idController,
-          decoration: _inputDeco(hint: '아이디를 입력하세요', icon: Icons.person_outline),
+          decoration:
+              _inputDeco(hint: '아이디를 입력하세요', icon: Icons.person_outline),
           textInputAction: TextInputAction.next,
           onSubmitted: (_) => FocusScope.of(context).requestFocus(_pwFocusNode),
         ),
@@ -305,8 +256,7 @@ class _LoginFormState extends State<_LoginForm> {
           decoration: _inputDeco(hint: '비밀번호를 입력하세요', icon: Icons.lock_outline)
               .copyWith(
             suffixIcon: IconButton(
-              icon: Icon(
-                  _obscurePw ? Icons.visibility_off : Icons.visibility,
+              icon: Icon(_obscurePw ? Icons.visibility_off : Icons.visibility,
                   color: AppColors.textHint),
               onPressed: () => setState(() => _obscurePw = !_obscurePw),
             ),
@@ -473,14 +423,14 @@ class _SignupFormState extends State<_SignupForm> {
       });
 
       if (!mounted) return;
-      UserStoreProvider.of(context).signUp(
-        name: _nameController.text.trim(),
-        gender: _selectedGender,
-        birthDate: birthDate,
-        location: _selectedLocation,
-        uid: docRef.id,
-        points: 0,
-      );
+      context.read<UserStore>().signUp(
+            name: _nameController.text.trim(),
+            gender: _selectedGender,
+            birthDate: birthDate,
+            location: _selectedLocation,
+            uid: docRef.id,
+            points: 0,
+          );
 
       try {
         await NotificationService.saveFcmToken(docRef.id);
@@ -492,8 +442,9 @@ class _SignupFormState extends State<_SignupForm> {
       await prefs.setString('saved_uid', docRef.id);
 
       if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
+      Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const AuthGate()),
+      (route) => false,
       );
     } catch (e) {
       if (mounted)
@@ -554,8 +505,8 @@ class _SignupFormState extends State<_SignupForm> {
                   _idChecked = false;
                   _idAvailable = false;
                 }),
-                decoration: _inputDeco(
-                    hint: '4자 이상 영문/숫자', icon: Icons.person_outline),
+                decoration:
+                    _inputDeco(hint: '4자 이상 영문/숫자', icon: Icons.person_outline),
               ),
             ),
             const SizedBox(width: 8),
@@ -595,8 +546,7 @@ class _SignupFormState extends State<_SignupForm> {
           decoration:
               _inputDeco(hint: '6자 이상', icon: Icons.lock_outline).copyWith(
             suffixIcon: IconButton(
-              icon: Icon(
-                  _obscurePw ? Icons.visibility_off : Icons.visibility,
+              icon: Icon(_obscurePw ? Icons.visibility_off : Icons.visibility,
                   color: AppColors.textHint),
               onPressed: () => setState(() => _obscurePw = !_obscurePw),
             ),
@@ -645,16 +595,14 @@ class _SignupFormState extends State<_SignupForm> {
               onTap: () => setState(() => _selectedGender = g),
               child: Container(
                 margin: const EdgeInsets.only(right: 10),
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 20, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 decoration: BoxDecoration(
-                  color: isSelected
-                      ? AppColors.primaryLight
-                      : AppColors.surface,
+                  color:
+                      isSelected ? AppColors.primaryLight : AppColors.surface,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color:
-                        isSelected ? AppColors.primary : AppColors.divider,
+                    color: isSelected ? AppColors.primary : AppColors.divider,
                     width: isSelected ? 1.5 : 1,
                   ),
                 ),
@@ -680,8 +628,7 @@ class _SignupFormState extends State<_SignupForm> {
           onTap: _pickBirthDate,
           child: Container(
             width: double.infinity,
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
               color: AppColors.surface,
               borderRadius: BorderRadius.circular(12),

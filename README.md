@@ -80,6 +80,8 @@ flutter build apk --release
 flutter build ipa --release
 ```
 
+## 데모 링크를 반복 접속할시 터치가 안 되는 오류가 발생합니다. 이 경우 화면을 왼쪽에서 오른쪽으로 가볍게 쓸어 뒤로 가기를 한번 하면 오류가 해결됩니다.
+
 ## 요구사항
 - Flutter 3.x 이상
 - Dart 3.x 이상

@@ -4,6 +4,14 @@ class InAppNotificationService {
   static OverlayEntry? _currentEntry;
   static bool _isShowing = false;
 
+  static void reset() {
+    try {
+      _currentEntry?.remove();
+    } catch (_) {}
+    _currentEntry = null;
+    _isShowing = false;
+  }
+
   static void show({
     required BuildContext context,
     required String title,
