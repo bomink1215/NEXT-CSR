@@ -470,13 +470,14 @@ class ChatScreenState extends State<ChatScreen> {
 
       final chatDoc =
           await firestore.collection('chatRooms').doc(widget.room.id).get();
-      final members = List<String>.from(
-          (chatDoc.data() as Map<String, dynamic>)['members'] ?? []);
+      final chatData = chatDoc.data(); // null 가능 → 한 번만 꺼내서 안전하게 사용
+      final members = chatData != null
+          ? List<String>.from(chatData['members'] ?? [])
+          : <String>[];
       final otherUid =
           members.firstWhere((uid) => uid != store.uid, orElse: () => '');
 
-      final postId =
-          (chatDoc.data() as Map<String, dynamic>)['postId'] as String?;
+      final postId = chatData?['postId'] as String?;
       if (postId != null && postId.isNotEmpty) {
         await firestore
             .collection('posts')
