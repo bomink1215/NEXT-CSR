@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/app_theme.dart';
 import '../models/user_store.dart';
 import 'home_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../utils/rating_checker.dart';
 import '../utils/location_picker.dart';
-import '../utils/notification_service.dart'; // ← 추가
+import '../utils/notification_service.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -15,10 +16,67 @@ class SignupScreen extends StatefulWidget {
 }
 
 class _SignupScreenState extends State<SignupScreen> {
-  bool _isLoginMode = true; // true = 로그인, false = 회원가입
+  bool _isLoginMode = true;
+  bool _autoLoginChecked = false; // 자동 로그인 체크 완료 여부
+
+  @override
+  void initState() {
+    super.initState();
+    _tryAutoLogin();
+  }
+
+  Future<void> _tryAutoLogin() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedUid = prefs.getString('saved_uid');
+    if (savedUid == null || savedUid.isEmpty) {
+      if (mounted) setState(() => _autoLoginChecked = true);
+      return;
+    }
+
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(savedUid)
+          .get();
+      if (!doc.exists || !mounted) {
+        setState(() => _autoLoginChecked = true);
+        return;
+      }
+      final data = doc.data()!;
+      UserStoreProvider.of(context).signUp(
+        name: data['name'] ?? '',
+        gender: data['gender'] ?? '',
+        birthDate: data['birthDate'] ?? '',
+        location: data['location'] ?? '',
+        uid: savedUid,
+        points: (data['points'] ?? 0) as int,
+        homeAddress: data['homeAddress'] ?? '',
+        avgRating: ((data['avgRating'] ?? 0.0) as num).toDouble(),
+      );
+      try {
+        await NotificationService.saveFcmToken(savedUid);
+        NotificationService.setupForegroundNotification();
+      } catch (_) {}
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
+      );
+    } catch (_) {
+      if (mounted) setState(() => _autoLoginChecked = true);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    // 자동 로그인 확인 중엔 스플래시 표시
+    if (!_autoLoginChecked) {
+      return const Scaffold(
+        backgroundColor: AppColors.background,
+        body: Center(
+          child: CircularProgressIndicator(color: AppColors.primary),
+        ),
+      );
+    }
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -185,6 +243,10 @@ class _LoginFormState extends State<_LoginForm> {
         await NotificationService.saveFcmToken(snap.docs.first.id);
         NotificationService.setupForegroundNotification();
       } catch (_) {}
+
+      // 로그인 유지: uid 저장
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('saved_uid', snap.docs.first.id);
 
       if (!mounted) return;
       RatingChecker.checkAndComplete();
@@ -424,6 +486,10 @@ class _SignupFormState extends State<_SignupForm> {
         await NotificationService.saveFcmToken(docRef.id);
         NotificationService.setupForegroundNotification();
       } catch (_) {}
+
+      // 로그인 유지: uid 저장
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('saved_uid', docRef.id);
 
       if (!mounted) return;
       Navigator.of(context).pushReplacement(

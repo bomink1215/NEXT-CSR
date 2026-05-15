@@ -1,0 +1,1 @@
+double webSafeAreaBottom() => 0;

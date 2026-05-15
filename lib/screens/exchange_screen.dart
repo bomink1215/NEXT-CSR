@@ -64,7 +64,7 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
         onPressed: () => _showCreateSheet(context),
         backgroundColor: AppColors.exchangeColor,
         icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text('교환글 올리기',
+        label: const Text('글쓰기',
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
       ),
       body: Column(
@@ -74,12 +74,7 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
             margin: const EdgeInsets.fromLTRB(20, 12, 20, 0),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  AppColors.exchangeColorLight,
-                  AppColors.exchangeColor.withOpacity(0.5),
-                ],
-              ),
+              color: AppColors.exchangeColor.withOpacity(0.1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Row(
@@ -391,6 +386,23 @@ class _ExchangeCardState extends State<_ExchangeCard> {
             Row(
               children: [
                 TagBadge(label: _statusLabel, color: _statusColor),
+                const SizedBox(width: 8),
+                const Icon(Icons.person_outline,
+                    size: 13, color: AppColors.textHint),
+                const SizedBox(width: 4),
+                Text(widget.post.authorName,
+                    style: const TextStyle(
+                        fontSize: 12, color: AppColors.textHint)),
+                const SizedBox(width: 8),
+                const Icon(Icons.location_on_outlined,
+                    size: 13, color: AppColors.textHint),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(widget.post.location,
+                      style: const TextStyle(
+                          fontSize: 12, color: AppColors.textHint),
+                      overflow: TextOverflow.ellipsis),
+                ),
               ],
             ),
             const SizedBox(height: 12),
@@ -423,7 +435,7 @@ class _ExchangeCardState extends State<_ExchangeCard> {
                   child: _ItemBox(
                     label: '원하는',
                     item: widget.post.wantItem,
-                    color: AppColors.secondary,
+                    color: const Color(0xFFE091BB),
                     icon: '🙏',
                   ),
                 ),
@@ -440,23 +452,10 @@ class _ExchangeCardState extends State<_ExchangeCard> {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                const Icon(Icons.person_outline,
-                    size: 13, color: AppColors.textHint),
-                const SizedBox(width: 4),
-                Text(widget.post.authorName,
-                    style: const TextStyle(
-                        fontSize: 12, color: AppColors.textHint)),
-                const SizedBox(width: 12),
-                const Icon(Icons.location_on_outlined,
-                    size: 13, color: AppColors.textHint),
-                const SizedBox(width: 4),
-                Text(widget.post.location,
-                    style: const TextStyle(
-                        fontSize: 12, color: AppColors.textHint)),
-                if (isAuthor) ...[
+            if (isAuthor) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
                   const Spacer(),
                   TextButton(
                     onPressed: () => _showPinDialog(context),
@@ -495,8 +494,8 @@ class _ExchangeCardState extends State<_ExchangeCard> {
                             fontWeight: FontWeight.w600)),
                   ),
                 ],
-              ],
-            ),
+              ),
+            ],
           ],
         ),
       ),
@@ -748,7 +747,7 @@ class _ExchangeDetail extends StatelessWidget {
                           child: _ItemBox(
                               label: '원하는',
                               item: post.wantItem,
-                              color: AppColors.secondary,
+                              color: const Color(0xFFE091BB),
                               icon: '🙏')),
                     ],
                   ),

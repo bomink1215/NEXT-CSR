@@ -65,8 +65,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showWriteSheet(context),
         backgroundColor: AppColors.reviewColor,
-        icon: const Icon(Icons.rate_review_outlined, color: Colors.white),
-        label: const Text('리뷰 작성하기',
+        icon: const Icon(Icons.add, color: Colors.white),
+        label: const Text('리뷰 쓰기',
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
       ),
       body: Column(
@@ -84,20 +84,14 @@ class _ReviewScreenState extends State<ReviewScreen> {
             ),
             child: Row(
               children: [
+                const Text('🏠', style: TextStyle(fontSize: 20)),
+                const SizedBox(width: 10),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: const [
-                      Text('🏠 실거주자 리뷰',
-                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
-                      SizedBox(height: 4),
-                      Text('광고 없는 솔직한 원룸 정보\n리뷰 작성 시 +30P 적립!',
-                          style: TextStyle(
-                              fontSize: 12,
-                              color: AppColors.textSecondary,
-                              height: 1.4)),
-                    ],
-                  ),
+                  child: const Text('광고 없는 솔직한 원룸 정보\n리뷰 작성 시 +30P 적립!',
+                      style: TextStyle(
+                          fontSize: 13,
+                          color: AppColors.textSecondary,
+                          height: 1.4)),
                 ),
                 const _PointGuide(),
               ],

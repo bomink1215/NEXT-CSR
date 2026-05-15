@@ -161,6 +161,33 @@ class _GatherScreenState extends State<GatherScreen> {
           }
           return CustomScrollView(
             slivers: [
+              // 안내 배너
+              SliverToBoxAdapter(
+                child: Container(
+                  margin: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: AppColors.gatherColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: const [
+                      Text('👥', style: TextStyle(fontSize: 20)),
+                      SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          '근처 이웃과 함께할 모임을 찾아요!\n성별·나이대 맞춤 모임 추천',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: AppColors.textSecondary,
+                            height: 1.4,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
               // 1. 상단 고정 영역 (빠른 모임 찾기)
               SliverToBoxAdapter(
                 child: Padding(

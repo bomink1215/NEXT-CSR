@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/app_theme.dart';
 import '../models/user_store.dart';
 import '../widgets/common_widgets.dart';
@@ -513,7 +514,7 @@ class _HomeTabState extends State<_HomeTab> {
                                   ),
                                 );
                               },
-                              color: AppColors.textPrimary,
+                              color: AppColors.textSecondary,
                             ),
                             if (hasUnread)
                               Positioned(
@@ -523,7 +524,7 @@ class _HomeTabState extends State<_HomeTab> {
                                   width: 8,
                                   height: 8,
                                   decoration: const BoxDecoration(
-                                    color: AppColors.primary,
+                                    color: Colors.red,
                                     shape: BoxShape.circle,
                                   ),
                                 ),
@@ -531,12 +532,6 @@ class _HomeTabState extends State<_HomeTab> {
                           ],
                         );
                       },
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.delete_sweep_outlined),
-                      onPressed: () => _showResetDialog(context),
-                      color: Colors.red.shade300,
-                      tooltip: '테스트 데이터 초기화 (개발용)',
                     ),
                     IconButton(
                       icon: const Icon(Icons.person_outline),
@@ -551,7 +546,10 @@ class _HomeTabState extends State<_HomeTab> {
                     ),
                     IconButton(
                       icon: const Icon(Icons.logout),
-                      onPressed: () {
+                      onPressed: () async {
+                        final prefs = await SharedPreferences.getInstance();
+                        await prefs.remove('saved_uid');
+                        if (!context.mounted) return;
                         Navigator.of(context, rootNavigator: true)
                             .pushReplacement(
                           MaterialPageRoute(

@@ -3,9 +3,9 @@
     "short_name": "live",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#C1D591",
+    "theme_color": "#C1D591",
+    "description": "1인 가구를 위한 초근거리 거래·소통 플랫폼",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

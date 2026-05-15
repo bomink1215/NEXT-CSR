@@ -661,7 +661,6 @@ class ChatScreenState extends State<ChatScreen> {
     });
 
     _ctrl.clear();
-    _focusNode.requestFocus(); // 전송 후 키보드 유지
   }
 
   @override
@@ -731,53 +730,55 @@ class ChatScreenState extends State<ChatScreen> {
         children: [
           _PostInfoBanner(room: widget.room),
           Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('chatRooms')
-                  .doc(widget.room.id)
-                  .collection('messages')
-                  .orderBy('time', descending: true)
-                  .where('time', isGreaterThanOrEqualTo: 
-                      Timestamp.fromDate(widget.room.joinedAt[UserStoreProvider.of(context).uid] ?? DateTime(2000)))
-                  .snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting)
-                  return const Center(child: CircularProgressIndicator());
+            child: GestureDetector(
+              onTap: () => FocusScope.of(context).unfocus(),
+              behavior: HitTestBehavior.translucent,
+              child: StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('chatRooms')
+                    .doc(widget.room.id)
+                    .collection('messages')
+                    .orderBy('time', descending: true)
+                    .where('time', isGreaterThanOrEqualTo:
+                        Timestamp.fromDate(widget.room.joinedAt[UserStoreProvider.of(context).uid] ?? DateTime(2000)))
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting)
+                    return const Center(child: CircularProgressIndicator());
 
-                final docs = snapshot.data?.docs ?? [];
+                  final docs = snapshot.data?.docs ?? [];
 
-                return GestureDetector(
-                  onTap: () => FocusScope.of(context).unfocus(),
-                  child: ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  reverse: true,
-                  itemCount: docs.length,
-                  itemBuilder: (context, i) {
-                    final data = docs[i].data() as Map<String, dynamic>;
-                    final isMe = data['senderName'] ==
-                        UserStoreProvider.of(context).name;
+                  return ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    reverse: true,
+                    keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                    itemCount: docs.length,
+                    itemBuilder: (context, i) {
+                      final data = docs[i].data() as Map<String, dynamic>;
+                      final isMe = data['senderName'] ==
+                          UserStoreProvider.of(context).name;
 
-                    return _MessageBubble(
-                      msg: _Message(
-                        text: data['text'] ?? '',
-                        isMe: isMe,
-                        isSystem: data['senderName'] == 'system',
-                        time: (data['time'] as Timestamp?)?.toDate() ??
-                            DateTime.now(),
-                      ),
-                      senderName: data['senderName'],
-                      senderUid: data['senderUid'] ?? '',
-                      room: currentRoom, // ← 실시간 room 전달
-                    );
-                  },
-                  ),
-                );
-              },
+                      return _MessageBubble(
+                        msg: _Message(
+                          text: data['text'] ?? '',
+                          isMe: isMe,
+                          isSystem: data['senderName'] == 'system',
+                          time: (data['time'] as Timestamp?)?.toDate() ??
+                              DateTime.now(),
+                        ),
+                        senderName: data['senderName'],
+                        senderUid: data['senderUid'] ?? '',
+                        room: currentRoom,
+                      );
+                    },
+                  );
+                },
+              ),
             ),
           ),
           Container(
             padding: EdgeInsets.fromLTRB(16, 8, 16,
-                MediaQuery.of(context).padding.bottom + 8), // ← 수정
+                MediaQuery.of(context).padding.bottom + 8),
             color: AppColors.surface,
             child: Row(
               children: [
@@ -791,10 +792,7 @@ class ChatScreenState extends State<ChatScreen> {
                       contentPadding:
                           EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                     ),
-                    onSubmitted: (_) {
-                      _send();
-                      _focusNode.requestFocus(); // ← 추가
-                    },
+                    onSubmitted: (_) => _send(),
                   ),
                 ),
                 const SizedBox(width: 8),
