@@ -444,7 +444,7 @@ class ChatScreenState extends State<ChatScreen> {
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             title: const Text('거래 파기'),
             content:
-                const Text('거래를 파기하시겠습니까?\n채팅방이 삭제되고 글이 다시 교환 가능 상태로 돌아갑니다.'),
+                const Text('거래를 파기하시겠습니까? 채팅방이 삭제되며 글은 계속 노출됩니다.'),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
