@@ -130,6 +130,7 @@ class _LoginForm extends StatefulWidget {
 class _LoginFormState extends State<_LoginForm> {
   final _idController = TextEditingController();
   final _pwController = TextEditingController();
+  final _pwFocusNode = FocusNode();
   bool _isLoading = false;
   bool _obscurePw = true;
 
@@ -137,6 +138,7 @@ class _LoginFormState extends State<_LoginForm> {
   void dispose() {
     _idController.dispose();
     _pwController.dispose();
+    _pwFocusNode.dispose();
     super.dispose();
   }
 
@@ -179,8 +181,10 @@ class _LoginFormState extends State<_LoginForm> {
         avgRating: ((data['avgRating'] ?? 0.0) as num).toDouble(),       
       );
 
-      await NotificationService.saveFcmToken(snap.docs.first.id);
-      NotificationService.setupForegroundNotification();
+      try {
+        await NotificationService.saveFcmToken(snap.docs.first.id);
+        NotificationService.setupForegroundNotification();
+      } catch (_) {}
 
       if (!mounted) return;
       RatingChecker.checkAndComplete();
@@ -223,6 +227,8 @@ class _LoginFormState extends State<_LoginForm> {
         TextField(
           controller: _idController,
           decoration: _inputDeco(hint: '아이디를 입력하세요', icon: Icons.person_outline),
+          textInputAction: TextInputAction.next,
+          onSubmitted: (_) => FocusScope.of(context).requestFocus(_pwFocusNode),
         ),
         const SizedBox(height: 16),
         const Text('비밀번호',
@@ -230,7 +236,10 @@ class _LoginFormState extends State<_LoginForm> {
         const SizedBox(height: 8),
         TextField(
           controller: _pwController,
+          focusNode: _pwFocusNode,
           obscureText: _obscurePw,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (_) => _login(),
           decoration: _inputDeco(hint: '비밀번호를 입력하세요', icon: Icons.lock_outline)
               .copyWith(
             suffixIcon: IconButton(
@@ -411,8 +420,10 @@ class _SignupFormState extends State<_SignupForm> {
         points: 0,
       );
 
-      await NotificationService.saveFcmToken(docRef.id);
-      NotificationService.setupForegroundNotification();
+      try {
+        await NotificationService.saveFcmToken(docRef.id);
+        NotificationService.setupForegroundNotification();
+      } catch (_) {}
 
       if (!mounted) return;
       Navigator.of(context).pushReplacement(

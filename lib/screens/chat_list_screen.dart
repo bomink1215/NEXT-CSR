@@ -660,7 +660,10 @@ class ChatScreenState extends State<ChatScreen> {
     });
 
     _ctrl.clear();
-    _focusNode.requestFocus(); // 전송 후 키보드 유지
+    // 전송 후 키보드 유지: 다음 프레임에 포커스 요청
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _focusNode.requestFocus();
+    });
   }
 
   @override
@@ -726,11 +729,15 @@ class ChatScreenState extends State<ChatScreen> {
           }),
         ],
       ),
+      resizeToAvoidBottomInset: false,
       body: Column(
         children: [
           _PostInfoBanner(room: widget.room),
           Expanded(
-            child: StreamBuilder<QuerySnapshot>(
+            child: GestureDetector(
+              onTap: () => FocusScope.of(context).unfocus(),
+              behavior: HitTestBehavior.translucent,
+              child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
                   .collection('chatRooms')
                   .doc(widget.room.id)
@@ -745,9 +752,7 @@ class ChatScreenState extends State<ChatScreen> {
 
                 final docs = snapshot.data?.docs ?? [];
 
-                return GestureDetector(
-                  onTap: () => FocusScope.of(context).unfocus(),
-                  child: ListView.builder(
+                return ListView.builder(
                   padding: const EdgeInsets.all(16),
                   reverse: true,
                   itemCount: docs.length,
@@ -766,16 +771,17 @@ class ChatScreenState extends State<ChatScreen> {
                       ),
                       senderName: data['senderName'],
                       senderUid: data['senderUid'] ?? '',
-                      room: currentRoom, // ← 실시간 room 전달
+                      room: currentRoom,
                     );
                   },
-                  ),
                 );
               },
             ),
           ),
+          ),
           Container(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            padding: EdgeInsets.fromLTRB(
+                16, 8, 16, 16 + MediaQuery.of(context).viewInsets.bottom),
             color: AppColors.surface,
             child: Row(
               children: [

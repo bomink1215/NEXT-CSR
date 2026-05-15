@@ -97,13 +97,19 @@ class _GatherScreenState extends State<GatherScreen> {
 
             // 위치 필터 (이전 글 하위 호환 포함)
             final loc = (d['location'] as String? ?? '');
-            if (loc.isEmpty || filterLoc.isEmpty) return true;  // location 없으면 표시
-            if (!loc.startsWith(filterLoc)) {
-              // 하위 호환: 이전 글은 "안암동", "성북구 안암동" 등 짧은 형식으로 저장됨
-              final matches = loc.split(' ')
-                  .where((p) => p.length >= 2)
-                  .any((p) => filterLoc.contains(p));
-              if (!matches) return false;
+            if (loc.isNotEmpty && filterLoc.isNotEmpty) {
+              if (!loc.startsWith(filterLoc)) {
+                final locParts = loc.split(' ').where((p) => p.isNotEmpty).toList();
+                final filterParts = filterLoc.split(' ').where((p) => p.isNotEmpty).toList();
+                if (locParts.isNotEmpty && locParts[0] == filterParts[0]) return false;
+                if (filterParts.length == 1) {
+                  // 시/도 전체 → 통과
+                } else if (filterParts.length == 2) {
+                  if (locParts.length >= 2 && !locParts.contains(filterParts.last)) return false;
+                } else {
+                  if (!locParts.contains(filterParts.last)) return false;
+                }
+              }
             }
 
             final gf = d['genderFilter'] ?? 'any';

@@ -1,25 +1,34 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:gatchi_sapsida/main.dart';
 
 class NotificationService {
   static final _db = FirebaseFirestore.instance;
 
+  static const _vapidKey =
+      'BOA6vEeblySOlXQBNjHoOrUU06vSyZE64dtFC0Tfn_hIBcLm2ODxx7CBNEkjpVCBHZmof_2aLSjnl0QcBNU1sYQ';
+
   // FCM 토큰 저장
   static Future<void> saveFcmToken(String uid) async {
     if (uid.isEmpty) return;
-    final token = await FirebaseMessaging.instance.getToken();
-    if (token == null) return;
-    await _db.collection('users').doc(uid).update({'fcmToken': token});
+    try {
+      final token = kIsWeb
+          ? await FirebaseMessaging.instance.getToken(vapidKey: _vapidKey)
+          : await FirebaseMessaging.instance.getToken();
+      if (token == null) return;
+      await _db.collection('users').doc(uid).update({'fcmToken': token});
 
-    FirebaseMessaging.instance.onTokenRefresh.listen((newToken) {
-      _db.collection('users').doc(uid).update({'fcmToken': newToken});
-    });
+      FirebaseMessaging.instance.onTokenRefresh.listen((newToken) {
+        _db.collection('users').doc(uid).update({'fcmToken': newToken});
+      });
+    } catch (_) {}
   }
 
   // 포그라운드 알림 표시 설정
   static void setupForegroundNotification() {
+    if (kIsWeb) return; // 웹은 서비스워커에서 처리
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
       final notification = message.notification;
       if (notification == null) return;
