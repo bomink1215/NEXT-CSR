@@ -7,7 +7,6 @@ import '../models/mock_data.dart';
 import '../widgets/common_widgets.dart';
 import './chat_list_screen.dart';
 import '../utils/notification_service.dart';
-import '../utils/location_service.dart';
 
 class GatherScreen extends StatefulWidget {
   final String? initialPostId;
@@ -279,7 +278,7 @@ class _QuickCategory extends StatelessWidget {
               : AppColors.surface,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isSelected ? AppColors.gatherColor : AppColors.divider,
+            color: isSelected ? AppColors.gatherColor : AppColors.gatherColorLight,
             width: isSelected ? 1.5 : 1,
           ),
         ),
@@ -312,24 +311,6 @@ class _GatherCard extends StatefulWidget {
 }
 
 class _GatherCardState extends State<_GatherCard> {
-  int? _walkMinutes;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _calcWalkMinutes();
-  }
-
-  Future<void> _calcWalkMinutes() async {
-    final store = UserStoreProvider.of(context);
-    if (store.homeAddress.isEmpty || widget.post.place.isEmpty) return;
-    final minutes = await LocationService.getWalkMinutesBetween(
-      store.homeAddress,
-      widget.post.place,
-    );
-    if (mounted) setState(() => _walkMinutes = minutes);
-  }
-
   String _genderLabel(GenderFilter f) {
     switch (f) {
       case GenderFilter.any:
@@ -445,16 +426,6 @@ class _GatherCardState extends State<_GatherCard> {
                       ),
                       if (widget.post.isFull)
                         const TagBadge(label: '마감', color: AppColors.error),
-                      if (_walkMinutes != null)
-                        Padding(
-                          padding: const EdgeInsets.only(left: 6),
-                          child: WalkBadge(minutes: _walkMinutes!),
-                        )
-                      else if (widget.post.place.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(left: 6),
-                          child: const WalkBadge(minutes: 5),
-                        ),
                     ],
                   ),
                   const SizedBox(height: 6),
@@ -843,7 +814,7 @@ class _GatherDetail extends StatelessWidget {
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                  color: AppColors.divider,
+                  color: AppColors.gatherColorLight,
                   borderRadius: BorderRadius.circular(2))),
           Expanded(
             child: SingleChildScrollView(
@@ -879,15 +850,15 @@ class _GatherDetail extends StatelessWidget {
                     child: Column(
                       children: [
                         _InfoRow(Icons.location_on_outlined, '장소', post.place),
-                        const Divider(color: AppColors.divider, height: 16),
+                        const Divider(color: AppColors.gatherColorLight, height: 16),
                         _InfoRow(Icons.access_time, '시간', meetStr),
-                        const Divider(color: AppColors.divider, height: 16),
+                        const Divider(color: AppColors.gatherColorLight, height: 16),
                         _InfoRow(Icons.people_outline, '인원',
                             '${post.currentMembers}/${post.maxMembers}명'),
-                        const Divider(color: AppColors.divider, height: 16),
+                        const Divider(color: AppColors.gatherColorLight, height: 16),
                         _InfoRow(Icons.person_outline, '성별',
                             _genderLabel(post.genderFilter)),
-                        const Divider(color: AppColors.divider, height: 16),
+                        const Divider(color: AppColors.gatherColorLight, height: 16),
                         _InfoRow(Icons.cake_outlined, '연령',
                             _ageLabel(post.ageFilter)),
                       ],
@@ -1145,7 +1116,7 @@ class _CreateGatherSheetState extends State<_CreateGatherSheet> {
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                  color: AppColors.divider,
+                  color: AppColors.gatherColorLight,
                   borderRadius: BorderRadius.circular(2))),
           const Padding(
             padding: EdgeInsets.all(20),
@@ -1188,7 +1159,7 @@ class _CreateGatherSheetState extends State<_CreateGatherSheet> {
                             border: Border.all(
                               color: isSelected
                                   ? AppColors.gatherColor
-                                  : AppColors.divider,
+                                  : AppColors.gatherColorLight,
                             ),
                           ),
                           child: Text(
@@ -1461,7 +1432,7 @@ class _EditGatherSheetState extends State<_EditGatherSheet> {
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-                color: AppColors.divider,
+                color: AppColors.gatherColorLight,
                 borderRadius: BorderRadius.circular(2)),
           ),
           const Padding(
@@ -1587,7 +1558,7 @@ class _FilterChip extends StatelessWidget {
         decoration: BoxDecoration(
           color: isSelected ? color : AppColors.surface,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: isSelected ? color : AppColors.divider),
+          border: Border.all(color: isSelected ? color : AppColors.gatherColorLight),
         ),
         child: Text(
           label,

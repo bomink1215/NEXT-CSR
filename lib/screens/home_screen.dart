@@ -24,6 +24,8 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
+  final List<StreamSubscription> _subscriptions = [];
+  final Map<String, String> _lastMessageIds = {};
 
   final List<Widget> _screens = const [
     _HomeTab(),
@@ -33,6 +35,95 @@ class _HomeScreenState extends State<HomeScreen> {
     GatherScreen(),
     ChatListScreen(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _subscribeToMessages();
+    });
+  }
+
+  @override
+  void dispose() {
+    for (final sub in _subscriptions) {
+      sub.cancel();
+    }
+    super.dispose();
+  }
+
+  void _subscribeToMessages() {
+    final store = UserStoreProvider.of(context);
+    final uid = store.uid;
+    if (uid.isEmpty) return;
+
+    FirebaseFirestore.instance
+        .collection('chatRooms')
+        .where('members', arrayContains: uid)
+        .snapshots()
+        .listen((snapshot) {
+      for (final doc in snapshot.docs) {
+        final roomId = doc.id;
+        final roomData = doc.data();
+        final roomTitle = roomData['title'] as String? ?? '';
+        final roomType = roomData['type'] as String? ?? '';
+        final roomEmoji = switch (roomType) {
+          'groupBuy' => '🛒',
+          'exchange' => '🔄',
+          'gather' => '👥',
+          _ => '💬',
+        };
+
+        final sub = FirebaseFirestore.instance
+            .collection('chatRooms')
+            .doc(roomId)
+            .collection('messages')
+            .orderBy('time', descending: true)
+            .limit(1)
+            .snapshots()
+            .listen((msgSnap) {
+          if (msgSnap.docs.isEmpty) return;
+          final msgDoc = msgSnap.docs.first;
+          final msgId = msgDoc.id; // ← 추가
+
+          // 이미 본 메시지면 무시
+          if (_lastMessageIds[roomId] == msgId) return; // ← 추가
+          _lastMessageIds[roomId] = msgId; // ← 추가
+
+          final msg = msgDoc.data(); // ← msgSnap.docs.first.data() 에서 변경
+          final senderUid = msg['senderUid'] as String? ?? '';
+          final senderName = msg['senderName'] as String? ?? '';
+          final text = msg['text'] as String? ?? '';
+          final time = (msg['time'] as Timestamp?)?.toDate();
+
+          if (senderUid == uid) return;
+          if (senderName == 'system') return;
+          if (store.currentChatRoomId == roomId) return;
+          if (time == null) return;
+          if (DateTime.now().difference(time).inSeconds > 3) return;
+
+          if (!mounted) return;
+          InAppNotificationService.show(
+            context: context,
+            title: roomTitle,
+            message: '$senderName: $text',
+            roomId: roomId,
+            emoji: roomEmoji,
+            onTap: () {
+              Navigator.of(context, rootNavigator: true).push(
+                MaterialPageRoute(
+                  builder: (_) => ChatScreen(
+                    room: ChatRoom.fromMap(roomData, roomId),
+                  ),
+                ),
+              );
+            },
+          );
+        });
+        _subscriptions.add(sub);
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -102,90 +193,6 @@ class _HomeTab extends StatefulWidget {
 }
 
 class _HomeTabState extends State<_HomeTab> {
-  final List<StreamSubscription> _subscriptions = [];
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _subscribeToMessages();
-    });
-  }
-
-  @override
-  void dispose() {
-    for (final sub in _subscriptions) {
-      sub.cancel();
-    }
-    super.dispose();
-  }
-
-  void _subscribeToMessages() {
-    final store = UserStoreProvider.of(context);
-    final uid = store.uid;
-    if (uid.isEmpty) return;
-
-    FirebaseFirestore.instance
-        .collection('chatRooms')
-        .where('members', arrayContains: uid)
-        .snapshots()
-        .listen((snapshot) {
-      for (final doc in snapshot.docs) {
-        final roomId = doc.id;
-        final roomData = doc.data();
-        final roomTitle = roomData['title'] as String? ?? '';
-        final roomType = roomData['type'] as String? ?? '';
-        final roomEmoji = switch (roomType) {
-          'groupBuy' => '🛒',
-          'exchange' => '🔄',
-          'gather' => '👥',
-          _ => '💬',
-        };
-
-        final sub = FirebaseFirestore.instance
-            .collection('chatRooms')
-            .doc(roomId)
-            .collection('messages')
-            .orderBy('time', descending: true)
-            .limit(1)
-            .snapshots()
-            .listen((msgSnap) {
-          if (msgSnap.docs.isEmpty) return;
-          final msg = msgSnap.docs.first.data();
-          final senderUid = msg['senderUid'] as String? ?? '';
-          final senderName = msg['senderName'] as String? ?? '';
-          final text = msg['text'] as String? ?? '';
-          final time = (msg['time'] as Timestamp?)?.toDate();
-
-          if (senderUid == uid) return;
-          if (senderName == 'system') return;
-          if (store.currentChatRoomId == roomId) return;
-          if (time == null) return;
-          if (DateTime.now().difference(time).inSeconds > 3) return;
-
-          if (!mounted) return;
-          InAppNotificationService.show(
-            context: context,
-            title: roomTitle,
-            message: '$senderName: $text',
-            roomId: roomId,
-            emoji: roomEmoji,
-            onTap: () {
-              Navigator.of(context, rootNavigator: true).push(
-                MaterialPageRoute(
-                  builder: (_) => ChatScreen(
-                    room: ChatRoom.fromMap(roomData, roomId),
-                  ),
-                ),
-              );
-            },
-          );
-        });
-        _subscriptions.add(sub);
-      }
-    });
-  }
-
   Future<void> _showResetDialog(BuildContext context) async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -601,7 +608,7 @@ class _HomeBanner extends StatelessWidget {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFFFF6B35), Color(0xFFFF9A5C)],
+          colors: [Color(0xFFC1D591), Color(0xFFD4E8A0)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -696,7 +703,7 @@ class _AdBanner extends StatelessWidget {
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w800,
-                color: Color(0xFFFFE066),
+                color: AppColors.reviewColor,
               ),
             ),
           ],
@@ -742,10 +749,10 @@ class _FeatureGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final features = [
-      _Feature('공동구매', '🛒', AppColors.buyColor, const GroupBuyScreen()),
-      _Feature('물물교환', '🔄', AppColors.exchangeColor, const ExchangeScreen()),
-      _Feature('원룸리뷰', '🏠', AppColors.reviewColor, const ReviewScreen()),
-      _Feature('모임 찾기', '👥', AppColors.gatherColor, const GatherScreen()),
+      _Feature('공동구매', '🛒', AppColors.buyColor, AppColors.buyColorLight, const GroupBuyScreen()),
+      _Feature('물물교환', '🔄', AppColors.exchangeColor, AppColors.exchangeColorLight, const ExchangeScreen()),
+      _Feature('원룸리뷰', '🏠', AppColors.reviewColor, AppColors.reviewColorLight, const ReviewScreen()),
+      _Feature('모임 찾기', '👥', AppColors.gatherColor, AppColors.gatherColorLight, const GatherScreen()),
     ];
 
     return Padding(
@@ -764,7 +771,7 @@ class _FeatureGrid extends StatelessWidget {
                 ),
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 decoration: BoxDecoration(
-                  color: f.color.withOpacity(0.08),
+                  color: f.lightColor,
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Column(
@@ -794,8 +801,9 @@ class _Feature {
   final String name;
   final String emoji;
   final Color color;
+  final Color lightColor;
   final Widget screen;
-  _Feature(this.name, this.emoji, this.color, this.screen);
+  _Feature(this.name, this.emoji, this.color, this.lightColor, this.screen);
 }
 
 // ─── 마감 임박 공동구매 ───────────────────────────────────────────
@@ -880,7 +888,7 @@ class _RecentGroupBuy extends StatelessWidget {
                   margin: const EdgeInsets.only(right: 12),
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: AppColors.surface,
+                    color: AppColors.cardBg,
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(color: AppColors.divider),
                   ),
@@ -893,7 +901,6 @@ class _RecentGroupBuy extends StatelessWidget {
                               label: data['category'] ?? '기타',
                               color: AppColors.buyColor),
                           const SizedBox(width: 6),
-                          const WalkBadge(minutes: 5),
                         ],
                       ),
                       const SizedBox(height: 8),
@@ -989,7 +996,7 @@ class _TodayGather extends StatelessWidget {
             return Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AppColors.surface,
+                color: AppColors.cardBg,
                 borderRadius: BorderRadius.circular(14),
                 border:
                     Border.all(color: AppColors.gatherColor.withOpacity(0.3)),
@@ -1020,7 +1027,7 @@ class _TodayGather extends StatelessWidget {
                   margin: const EdgeInsets.only(bottom: 10),
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: AppColors.surface,
+                    color: AppColors.cardBg,
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(
                         color: AppColors.gatherColor.withOpacity(0.3)),

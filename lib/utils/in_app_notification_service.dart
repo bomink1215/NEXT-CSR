@@ -71,7 +71,7 @@ class _InAppBannerState extends State<_InAppBanner>
   void initState() {
     super.initState();
     _controller = AnimationController(
-      duration: const Duration(milliseconds: 300),
+      duration: const Duration(milliseconds: 400),
       vsync: this,
     );
     _slideAnim = Tween<Offset>(
@@ -79,7 +79,7 @@ class _InAppBannerState extends State<_InAppBanner>
       end: Offset.zero,
     ).animate(CurvedAnimation(
       parent: _controller,
-      curve: Curves.easeOut,
+      curve: Curves.easeOutCubic,
     ));
     _controller.forward();
   }

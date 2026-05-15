@@ -42,7 +42,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
             margin: const EdgeInsets.only(right: 16),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
-              color: AppColors.reviewColor.withOpacity(0.1),
+              color: AppColors.reviewColorLight,
               borderRadius: BorderRadius.circular(20),
             ),
             child: Row(
@@ -77,8 +77,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               gradient: LinearGradient(colors: [
-                AppColors.reviewColor.withOpacity(0.1),
-                AppColors.secondary.withOpacity(0.05),
+                AppColors.reviewColorLight,
+                AppColors.reviewColorLight.withOpacity(0.5),
               ]),
               borderRadius: BorderRadius.circular(12),
             ),
@@ -128,10 +128,10 @@ class _ReviewScreenState extends State<ReviewScreen> {
                 contentPadding: const EdgeInsets.symmetric(vertical: 10),
                 border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: AppColors.divider)),
+                    borderSide: const BorderSide(color: AppColors.reviewColorLight)),
                 enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: AppColors.divider)),
+                    borderSide: const BorderSide(color: AppColors.reviewColorLight)),
                 focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide:
@@ -360,13 +360,13 @@ class _ReviewCard extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: isAuthor
-              ? AppColors.reviewColor.withOpacity(0.06)
+              ? AppColors.reviewColorLight
               : AppColors.surface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isAuthor
-                ? AppColors.reviewColor.withOpacity(0.35)
-                : AppColors.divider,
+                ? AppColors.reviewColor.withOpacity(0.3)
+                : AppColors.reviewColorLight,
           ),
         ),
         child: Column(
@@ -463,7 +463,7 @@ class _ReviewCard extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: AppColors.reviewColor.withOpacity(0.1),
+                      color: AppColors.reviewColorLight,
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Row(
@@ -556,7 +556,7 @@ class _ReviewCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               decoration: BoxDecoration(
-                color: AppColors.reviewColor.withOpacity(0.1),
+                color: AppColors.reviewColorLight,
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Row(
@@ -615,7 +615,7 @@ class _ReviewCard extends StatelessWidget {
                 child: Container(
                   width: 40, height: 4,
                   decoration: BoxDecoration(
-                      color: AppColors.divider,
+                      color: AppColors.reviewColorLight,
                       borderRadius: BorderRadius.circular(2)),
                 ),
               ),
@@ -826,7 +826,7 @@ class _WriteReviewSheetState extends State<_WriteReviewSheet> {
               margin: const EdgeInsets.only(top: 12),
               width: 40, height: 4,
               decoration: BoxDecoration(
-                  color: AppColors.divider,
+                  color: AppColors.reviewColorLight,
                   borderRadius: BorderRadius.circular(2))),
           const Padding(
             padding: EdgeInsets.fromLTRB(20, 16, 20, 4),
@@ -951,7 +951,7 @@ class _WriteReviewSheetState extends State<_WriteReviewSheet> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: AppColors.reviewColor.withOpacity(0.08),
+                      color: AppColors.reviewColorLight,
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Row(
@@ -1080,10 +1080,10 @@ class _RatingChip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: isSelected ? selectedColor.withOpacity(0.12) : AppColors.cardBg,
+          color: isSelected ? selectedColor.withOpacity(0.12) : AppColors.surface,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isSelected ? selectedColor : AppColors.divider,
+            color: isSelected ? selectedColor : AppColors.reviewColorLight,
             width: isSelected ? 1.5 : 1,
           ),
         ),
@@ -1233,7 +1233,7 @@ class _EditReviewSheetState extends State<_EditReviewSheet> {
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-                color: AppColors.divider,
+                color: AppColors.reviewColorLight,
                 borderRadius: BorderRadius.circular(2)),
           ),
           const Padding(

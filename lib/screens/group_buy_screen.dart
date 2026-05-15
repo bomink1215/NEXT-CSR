@@ -13,7 +13,6 @@ import '../models/user_store.dart';
 import './chat_list_screen.dart';
 import 'package:provider/provider.dart';
 import '../utils/notification_service.dart';
-import '../utils/location_service.dart';
 
 class GroupBuyScreen extends StatefulWidget {
   final String? initialPostId;
@@ -117,11 +116,11 @@ class _GroupBuyScreenState extends State<GroupBuyScreen> {
                 contentPadding: const EdgeInsets.symmetric(vertical: 10),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: AppColors.divider),
+                  borderSide: const BorderSide(color: AppColors.buyColorLight),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: AppColors.divider),
+                  borderSide: const BorderSide(color: AppColors.buyColorLight),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -150,7 +149,7 @@ class _GroupBuyScreenState extends State<GroupBuyScreen> {
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
                         color:
-                            isSelected ? AppColors.buyColor : AppColors.divider,
+                            isSelected ? AppColors.buyColor : AppColors.buyColorLight,
                       ),
                     ),
                     child: Text(
@@ -324,24 +323,6 @@ class _GroupBuyCard extends StatefulWidget {
 }
 
 class _GroupBuyCardState extends State<_GroupBuyCard> {
-  int? _walkMinutes;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _calcWalkMinutes();
-  }
-
-  Future<void> _calcWalkMinutes() async {
-    final store = UserStoreProvider.of(context);
-    if (store.homeAddress.isEmpty || widget.post.meetingPlace.isEmpty) return;
-    final minutes = await LocationService.getWalkMinutesBetween(
-      store.homeAddress,
-      widget.post.meetingPlace,
-    );
-    if (mounted) setState(() => _walkMinutes = minutes);
-  }
-
   @override
   Widget build(BuildContext context) {
     final userStore = UserStoreProvider.of(context);
@@ -354,17 +335,17 @@ class _GroupBuyCardState extends State<_GroupBuyCard> {
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: isAuthor
-              ? AppColors.primary.withOpacity(0.06)
+              ? AppColors.buyColorLight
               : widget.post.isFull
                   ? AppColors.textHint.withOpacity(0.07)
                   : AppColors.surface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isAuthor
-                ? AppColors.primary.withOpacity(0.3)
+                ? AppColors.buyColor.withOpacity(0.3)
                 : widget.post.isFull
                     ? AppColors.textHint.withOpacity(0.25)
-                    : AppColors.divider,
+                    : AppColors.buyColorLight,
           ),
         ),
         child: Column(
@@ -396,7 +377,7 @@ class _GroupBuyCardState extends State<_GroupBuyCard> {
                 margin: const EdgeInsets.only(bottom: 8),
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.1),
+                  color: AppColors.buyColorLight,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
@@ -408,7 +389,7 @@ class _GroupBuyCardState extends State<_GroupBuyCard> {
                         style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
-                            color: AppColors.primary)),
+                            color: AppColors.buyColor)),
                   ],
                 ),
               ),
@@ -425,10 +406,6 @@ class _GroupBuyCardState extends State<_GroupBuyCard> {
                 if (widget.post.isDelivery)
                   TagBadge(label: '🛵 배달소분', color: AppColors.secondary),
                 const Spacer(),
-                if (_walkMinutes != null)
-                  WalkBadge(minutes: _walkMinutes!)
-                else if (widget.post.meetingPlace.isNotEmpty)
-                  const WalkBadge(minutes: 5),
               ],
             ),
             const SizedBox(height: 10),
@@ -504,7 +481,7 @@ class _GroupBuyCardState extends State<_GroupBuyCard> {
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
-                        color: AppColors.primary,
+                        color: AppColors.buyColor,
                       ),
                     ),
                   ],
@@ -522,7 +499,7 @@ class _GroupBuyCardState extends State<_GroupBuyCard> {
                         child: const Text('🔥 상단노출',
                             style: TextStyle(
                                 fontSize: 13,
-                                color: AppColors.primary,
+                                color: AppColors.buyColor,
                                 fontWeight: FontWeight.w600)),
                       ),
                       TextButton(
@@ -535,7 +512,7 @@ class _GroupBuyCardState extends State<_GroupBuyCard> {
                         child: const Text('수정',
                             style: TextStyle(
                                 fontSize: 13,
-                                color: AppColors.primary,
+                                color: AppColors.buyColor,
                                 fontWeight: FontWeight.w600)),
                       ),
                       TextButton(
@@ -676,7 +653,7 @@ class _GroupBuyDetail extends StatelessWidget {
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-              color: AppColors.divider,
+              color: AppColors.buyColorLight,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -709,8 +686,6 @@ class _GroupBuyDetail extends StatelessWidget {
                   Row(
                     children: [
                       TagBadge(label: post.category, color: AppColors.buyColor),
-                      const SizedBox(width: 8),
-                      WalkBadge(minutes: post.walkMinutes),
                     ],
                   ),
                   const SizedBox(height: 12),
@@ -770,7 +745,7 @@ class _GroupBuyDetail extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: AppColors.primaryLight,
+                      color: AppColors.buyColorLight,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Row(
@@ -780,13 +755,13 @@ class _GroupBuyDetail extends StatelessWidget {
                         Container(
                             width: 1,
                             height: 30,
-                            color: AppColors.primary.withOpacity(0.2)),
+                            color: AppColors.buyColor.withOpacity(0.2)),
                         _InfoItem('1인 부담', '${_formatPrice(post.unitPrice)}원',
                             highlight: true),
                         Container(
                             width: 1,
                             height: 30,
-                            color: AppColors.primary.withOpacity(0.2)),
+                            color: AppColors.buyColor.withOpacity(0.2)),
                         _InfoItem('인원', '${post.maxParticipants}명'),
                       ],
                     ),
@@ -808,14 +783,14 @@ class _GroupBuyDetail extends StatelessWidget {
                         width: double.infinity,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         decoration: BoxDecoration(
-                          color: AppColors.primary.withOpacity(0.08),
+                          color: AppColors.buyColor.withOpacity(0.08),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: const Center(
                           child: Text(
                             '내가 올린 공동구매 글',
                             style: TextStyle(
-                              color: AppColors.primary,
+                              color: AppColors.buyColor,
                               fontWeight: FontWeight.w700,
                               fontSize: 15,
                             ),
@@ -1061,7 +1036,7 @@ class _CreateGroupBuySheetState extends State<_CreateGroupBuySheet> {
                   width: 40,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: AppColors.divider,
+                    color: AppColors.buyColorLight,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -1103,7 +1078,7 @@ class _CreateGroupBuySheetState extends State<_CreateGroupBuySheet> {
                                   border: Border.all(
                                       color: _type == t
                                           ? AppColors.buyColor
-                                          : AppColors.divider),
+                                          : AppColors.buyColorLight),
                                 ),
                                 child: Text(t,
                                     style: TextStyle(
@@ -1169,7 +1144,7 @@ class _CreateGroupBuySheetState extends State<_CreateGroupBuySheet> {
                                       color: AppColors.cardBg,
                                       borderRadius: BorderRadius.circular(12),
                                       border:
-                                          Border.all(color: AppColors.divider),
+                                          Border.all(color: AppColors.buyColorLight),
                                     ),
                                     child: Row(
                                       mainAxisAlignment:
@@ -1264,7 +1239,7 @@ class _CreateGroupBuySheetState extends State<_CreateGroupBuySheet> {
                                       border: Border.all(
                                           color: !_useCustomDate
                                               ? AppColors.buyColor
-                                              : AppColors.divider),
+                                              : AppColors.buyColorLight),
                                     ),
                                     child: Text('몇 시간 후',
                                         style: TextStyle(
@@ -1293,7 +1268,7 @@ class _CreateGroupBuySheetState extends State<_CreateGroupBuySheet> {
                                       border: Border.all(
                                           color: _useCustomDate
                                               ? AppColors.buyColor
-                                              : AppColors.divider),
+                                              : AppColors.buyColorLight),
                                     ),
                                     child: Text('시간 직접 선택',
                                         style: TextStyle(
@@ -1378,7 +1353,7 @@ class _CreateGroupBuySheetState extends State<_CreateGroupBuySheet> {
                                 child: Text(
                                   '마감시간: 오늘 ${_deadline!.hour}시 ${_deadline!.minute.toString().padLeft(2, '0')}분',
                                   style: const TextStyle(
-                                      fontSize: 13, color: AppColors.primary),
+                                      fontSize: 13, color: AppColors.buyColor),
                                 ),
                               ),
                           ] else ...[
@@ -1402,7 +1377,7 @@ class _CreateGroupBuySheetState extends State<_CreateGroupBuySheet> {
                                       border: Border.all(
                                           color: !_useCustomDate
                                               ? AppColors.buyColor
-                                              : AppColors.divider),
+                                              : AppColors.buyColorLight),
                                     ),
                                     child: Text('며칠 후',
                                         style: TextStyle(
@@ -1431,7 +1406,7 @@ class _CreateGroupBuySheetState extends State<_CreateGroupBuySheet> {
                                       border: Border.all(
                                           color: _useCustomDate
                                               ? AppColors.buyColor
-                                              : AppColors.divider),
+                                              : AppColors.buyColorLight),
                                     ),
                                     child: Text('날짜 직접 선택',
                                         style: TextStyle(
@@ -1516,7 +1491,7 @@ class _CreateGroupBuySheetState extends State<_CreateGroupBuySheet> {
                                 child: Text(
                                   '마감일: ${_deadline!.year}년 ${_deadline!.month}월 ${_deadline!.day}일',
                                   style: const TextStyle(
-                                      fontSize: 13, color: AppColors.primary),
+                                      fontSize: 13, color: AppColors.buyColor),
                                 ),
                               ),
                           ],
@@ -1712,7 +1687,7 @@ class _EditGroupBuySheetState extends State<_EditGroupBuySheet> {
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-                color: AppColors.divider,
+                color: AppColors.buyColorLight,
                 borderRadius: BorderRadius.circular(2)),
           ),
           const Padding(
@@ -1761,7 +1736,7 @@ class _EditGroupBuySheetState extends State<_EditGroupBuySheet> {
                             border: Border.all(
                                 color: sel
                                     ? AppColors.buyColor
-                                    : AppColors.divider),
+                                    : AppColors.buyColorLight),
                           ),
                           child: Text(t,
                               style: TextStyle(
@@ -1789,7 +1764,7 @@ class _EditGroupBuySheetState extends State<_EditGroupBuySheet> {
                       hintText: '원',
                       suffixText: '1인 ${_unitPrice}원',
                       suffixStyle: const TextStyle(
-                          color: AppColors.primary,
+                          color: AppColors.buyColor,
                           fontWeight: FontWeight.w700),
                     ),
                   ),
@@ -1864,7 +1839,7 @@ class _EditGroupBuySheetState extends State<_EditGroupBuySheet> {
                                 border: Border.all(
                                     color: !_useCustomDate
                                         ? AppColors.buyColor
-                                        : AppColors.divider),
+                                        : AppColors.buyColorLight),
                               ),
                               child: Text('몇 시간 후',
                                   style: TextStyle(
@@ -1893,7 +1868,7 @@ class _EditGroupBuySheetState extends State<_EditGroupBuySheet> {
                                 border: Border.all(
                                     color: _useCustomDate
                                         ? AppColors.buyColor
-                                        : AppColors.divider),
+                                        : AppColors.buyColorLight),
                               ),
                               child: Text('시간 직접 선택',
                                   style: TextStyle(
@@ -1977,7 +1952,7 @@ class _EditGroupBuySheetState extends State<_EditGroupBuySheet> {
                           child: Text(
                             '마감시간: 오늘 ${_deadline!.hour}시 ${_deadline!.minute.toString().padLeft(2, '0')}분',
                             style: const TextStyle(
-                                fontSize: 13, color: AppColors.primary),
+                                fontSize: 13, color: AppColors.buyColor),
                           ),
                         ),
                     ] else ...[
@@ -2001,7 +1976,7 @@ class _EditGroupBuySheetState extends State<_EditGroupBuySheet> {
                                 border: Border.all(
                                     color: !_useCustomDate
                                         ? AppColors.buyColor
-                                        : AppColors.divider),
+                                        : AppColors.buyColorLight),
                               ),
                               child: Text('며칠 후',
                                   style: TextStyle(
@@ -2030,7 +2005,7 @@ class _EditGroupBuySheetState extends State<_EditGroupBuySheet> {
                                 border: Border.all(
                                     color: _useCustomDate
                                         ? AppColors.buyColor
-                                        : AppColors.divider),
+                                        : AppColors.buyColorLight),
                               ),
                               child: Text('날짜 직접 선택',
                                   style: TextStyle(
@@ -2114,7 +2089,7 @@ class _EditGroupBuySheetState extends State<_EditGroupBuySheet> {
                           child: Text(
                             '마감일: ${_deadline!.year}년 ${_deadline!.month}월 ${_deadline!.day}일',
                             style: const TextStyle(
-                                fontSize: 13, color: AppColors.primary),
+                                fontSize: 13, color: AppColors.buyColor),
                           ),
                         ),
                     ],

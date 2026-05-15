@@ -1,24 +1,31 @@
 import 'package:flutter/material.dart';
 
 class AppColors {
-  static const Color primary = Color(0xFFFF6B35);
-  static const Color primaryLight = Color(0xFFFFE0D3);
-  static const Color secondary = Color(0xFF2EC4B6);
+  static const Color primary = Color(0xFFC1D591);      // Vetiver 원색
+  static const Color primaryLight = Color(0xFFEEF4DC); // Vetiver 연한 버전
+  static const Color secondary = Color(0xFFF1B8D9);
   static const Color accent = Color(0xFFFFBF47);
-  static const Color background = Color(0xFFFAF8F5);
+  static const Color background = Color(0xFFFFFFFF);   // 흰색
   static const Color surface = Color(0xFFFFFFFF);
-  static const Color cardBg = Color(0xFFF5F3EF);
+  static const Color cardBg = Color(0xFFF5F9EE);       // Vetiver 연한 버전
   static const Color textPrimary = Color(0xFF1A1A1A);
   static const Color textSecondary = Color(0xFF6B6B6B);
   static const Color textHint = Color(0xFFB0B0B0);
-  static const Color divider = Color(0xFFEEECE8);
+  static const Color divider = Color(0xFFE8EFD8);
   static const Color success = Color(0xFF4CAF50);
   static const Color error = Color(0xFFE53935);
 
-  static const Color buyColor = Color(0xFFFF6B35);
-  static const Color exchangeColor = Color(0xFF9C6FDE);
-  static const Color reviewColor = Color(0xFF2EC4B6);
-  static const Color gatherColor = Color(0xFFFF9800);
+  // 원색 (아이콘/텍스트/버튼용)
+  static const Color buyColor = Color(0xFFD4789A);      // Strawberry Shake 진하게
+  static const Color exchangeColor = Color(0xFF5A8DC4); // Hydrangea 진하게
+  static const Color reviewColor = Color(0xFF6B6BBF);   // Grape Soda 진하게
+  static const Color gatherColor = Color(0xFFEFAB82);   // Peach Cream 진하게
+
+  // 연한 버전 (배경용)
+  static const Color buyColorLight = Color(0xFFFDE8F2);      // Strawberry Shake 연하게
+  static const Color exchangeColorLight = Color(0xFFF0F5FF); // Hydrangea 연하게
+  static const Color reviewColorLight = Color(0xFFEEEEFF);   // Grape Soda 연하게
+  static const Color gatherColorLight = Color(0xFFFDF5EF);   // Peach Cream 연하게
 }
 
 class AppTheme {

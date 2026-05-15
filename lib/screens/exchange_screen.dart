@@ -11,7 +11,6 @@ import '../models/models.dart';
 import '../models/mock_data.dart';
 import '../widgets/common_widgets.dart';
 import '../utils/notification_service.dart';
-import '../utils/location_service.dart';
 
 class ExchangeScreen extends StatefulWidget {
   final String? initialPostId;
@@ -77,8 +76,8 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
-                  AppColors.exchangeColor.withOpacity(0.1),
-                  AppColors.exchangeColor.withOpacity(0.05),
+                  AppColors.exchangeColorLight,
+                  AppColors.exchangeColor.withOpacity(0.5),
                 ],
               ),
               borderRadius: BorderRadius.circular(12),
@@ -127,11 +126,11 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
                 contentPadding: const EdgeInsets.symmetric(vertical: 10),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: AppColors.divider),
+                  borderSide: const BorderSide(color: AppColors.exchangeColorLight),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: AppColors.divider),
+                  borderSide: const BorderSide(color: AppColors.exchangeColorLight),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -293,24 +292,6 @@ class _ExchangeCard extends StatefulWidget {
 }
 
 class _ExchangeCardState extends State<_ExchangeCard> {
-  int? _walkMinutes;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _calcWalkMinutes();
-  }
-
-  Future<void> _calcWalkMinutes() async {
-    final store = UserStoreProvider.of(context);
-    if (store.homeAddress.isEmpty || widget.post.meetingPlace.isEmpty) return;
-    final minutes = await LocationService.getWalkMinutesBetween(
-      store.homeAddress,
-      widget.post.meetingPlace,
-    );
-    if (mounted) setState(() => _walkMinutes = minutes);
-  }
-
   Color get _statusColor {
     switch (widget.post.status) {
       case ExchangeStatus.open:
@@ -346,17 +327,17 @@ class _ExchangeCardState extends State<_ExchangeCard> {
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           color: isAuthor
-              ? AppColors.exchangeColor.withOpacity(0.06)
+              ? AppColors.exchangeColorLight
               : widget.post.status == ExchangeStatus.done
                   ? AppColors.textHint.withOpacity(0.07)
                   : AppColors.surface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isAuthor
-                ? AppColors.exchangeColor.withOpacity(0.35)
+                ? AppColors.exchangeColor.withOpacity(0.3)
                 : widget.post.status == ExchangeStatus.done
                     ? AppColors.textHint.withOpacity(0.25)
-                    : AppColors.divider,
+                    : AppColors.exchangeColorLight,
           ),
         ),
         child: Column(
@@ -387,7 +368,7 @@ class _ExchangeCardState extends State<_ExchangeCard> {
                 margin: const EdgeInsets.only(bottom: 8),
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: AppColors.exchangeColor.withOpacity(0.1),
+                  color: AppColors.exchangeColor,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
@@ -407,11 +388,6 @@ class _ExchangeCardState extends State<_ExchangeCard> {
             Row(
               children: [
                 TagBadge(label: _statusLabel, color: _statusColor),
-                const Spacer(),
-                if (_walkMinutes != null)
-                  WalkBadge(minutes: _walkMinutes!)
-                else if (widget.post.meetingPlace.isNotEmpty)
-                  const WalkBadge(minutes: 5),
               ],
             ),
             const SizedBox(height: 12),
@@ -431,12 +407,12 @@ class _ExchangeCardState extends State<_ExchangeCard> {
                     width: 36,
                     height: 36,
                     decoration: BoxDecoration(
-                      color: AppColors.exchangeColor.withOpacity(0.1),
+                      color: AppColors.exchangeColor,
                       shape: BoxShape.circle,
                     ),
                     child: const Center(
                       child: Icon(Icons.swap_horiz,
-                          color: AppColors.exchangeColor, size: 20),
+                          color: Colors.white, size: 20),
                     ),
                   ),
                 ),
@@ -713,7 +689,7 @@ class _ExchangeDetail extends StatelessWidget {
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-                color: AppColors.divider,
+                color: AppColors.exchangeColorLight,
                 borderRadius: BorderRadius.circular(2)),
           ),
           Expanded(
@@ -783,13 +759,13 @@ class _ExchangeDetail extends StatelessWidget {
                         width: double.infinity,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         decoration: BoxDecoration(
-                          color: AppColors.exchangeColor.withOpacity(0.08),
+                          color: AppColors.exchangeColorLight,
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: const Center(
                           child: Text('내가 올린 물물교환 글',
                               style: TextStyle(
-                                  color: AppColors.exchangeColor,
+                                  color: AppColors.exchangeColorLight,
                                   fontWeight: FontWeight.w700,
                                   fontSize: 15)),
                         ),
@@ -825,7 +801,7 @@ class _ExchangeDetail extends StatelessWidget {
                                       onPressed: () => Navigator.pop(ctx),
                                       child: const Text('확인',
                                           style: TextStyle(
-                                              color: AppColors.exchangeColor)),
+                                              color: AppColors.exchangeColorLight)),
                                     ),
                                   ],
                                 ),
@@ -947,7 +923,6 @@ class _CreateExchangeSheetState extends State<_CreateExchangeSheet> {
   }
 
   Future<void> _submit() async {
-    setState(() => _isUploading = true);
     if (_offerController.text.trim().isEmpty ||
         _wantController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1021,7 +996,7 @@ class _CreateExchangeSheetState extends State<_CreateExchangeSheet> {
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-                color: AppColors.divider,
+                color: AppColors.exchangeColorLight,
                 borderRadius: BorderRadius.circular(2)),
           ),
           const Padding(
@@ -1194,7 +1169,7 @@ class _EditExchangeSheetState extends State<_EditExchangeSheet> {
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-                color: AppColors.divider,
+                color: AppColors.exchangeColorLight,
                 borderRadius: BorderRadius.circular(2)),
           ),
           const Padding(

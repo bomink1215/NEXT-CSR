@@ -25,6 +25,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('채팅')),
       body: Column(
@@ -425,7 +426,7 @@ class ChatScreenState extends State<ChatScreen> {
       for (final msg in messages.docs) {
         await msg.reference.delete();
       }
-      
+
       await firestore.collection('chatRooms').doc(widget.room.id).delete();
       if (context.mounted) Navigator.pop(context);
     } catch (e) {
@@ -775,7 +776,8 @@ class ChatScreenState extends State<ChatScreen> {
             ),
           ),
           Container(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            padding: EdgeInsets.fromLTRB(16, 8, 16,
+                MediaQuery.of(context).padding.bottom + 8), // ← 수정
             color: AppColors.surface,
             child: Row(
               children: [
@@ -783,12 +785,16 @@ class ChatScreenState extends State<ChatScreen> {
                   child: TextField(
                     controller: _ctrl,
                     focusNode: _focusNode,
+                    textInputAction: TextInputAction.send, // ← 추가
                     decoration: const InputDecoration(
                       hintText: '메시지를 입력하세요',
                       contentPadding:
                           EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                     ),
-                    onSubmitted: (_) => _send(),
+                    onSubmitted: (_) {
+                      _send();
+                      _focusNode.requestFocus(); // ← 추가
+                    },
                   ),
                 ),
                 const SizedBox(width: 8),
